@@ -182,9 +182,11 @@ def test_every_vertex_belongs_to_the_bone_it_is_nearest():
     A hand hangs beside a thigh, so any sphere wide enough to clear the fingers
     also eats the outside of the leg. Ownership has no such conflict.
     """
+    # Beside the thigh, not inside it: a hand that overlaps the leg in space
+    # is not a hard case, it is an impossible one.
     thigh = cylinder(8.6, 8.6, 60, 80, cx=-9.5, n_ring=40, n_layer=40)
-    hand = cylinder(5.0, 5.0, 66, 78, cx=-21.0, n_ring=40, n_layer=40)
-    arm = np.array([[-21.0, 100.0, 0.0], [-21.0, 72.0, 0.0]])
+    hand = cylinder(5.0, 5.0, 66, 78, cx=-24.0, n_ring=40, n_layer=40)
+    arm = np.array([[-24.0, 100.0, 0.0], [-24.0, 72.0, 0.0]])
     leg = np.array([[-9.5, 88.0, 0.0], [-9.5, 50.0, 0.0]])
 
     pts = np.vstack([thigh, hand])
