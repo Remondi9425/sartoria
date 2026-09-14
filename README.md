@@ -113,6 +113,32 @@ container**, which is an odd pairing, and OpenCV decodes it — 84 frames from a
 3-second capture. A clip it genuinely cannot open now says so specifically,
 rather than being reported as "no person in the clip".
 
+## Deploying the engine (Modal)
+
+The web app on Vercel cannot reach a laptop, so the Python worker needs a home.
+`modal_app.py` serves exactly the FastAPI app in `spike/serve.py` — same code as
+the CLI, same code the tests cover.
+
+```bash
+.venv/bin/modal token new          # one time, opens a browser
+.venv/bin/modal serve modal_app.py    # live-reloading, to try it
+.venv/bin/modal deploy modal_app.py   # a stable https URL
+```
+
+Then put that URL into the front end: `NEXT_PUBLIC_ENGINE_URL` in Vercel's
+project settings, and redeploy.
+
+Two things the image does on purpose. The 30 MB pose model is **baked in at
+build time**, because a service that scales to zero would otherwise download it
+on the critical path of most first requests. And `apt_install("libgl1",
+"libglib2.0-0")` is not optional: without them `import cv2` fails at container
+start with a bare ImportError, even in the headless build.
+
+**No GPU.** The silhouette method is MediaPipe on CPU and takes a few seconds
+for a ten-second clip; a GPU would be paid for and idle. If the spike says the
+method needs a heavier model, add `gpu="T4"` to the decorator and nothing else
+changes — that flexibility is the actual argument for Modal over a plain box.
+
 ## Running on a file
 
 ```bash

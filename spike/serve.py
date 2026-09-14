@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import base64
 import json
+import os
 import tempfile
 import time
 import uuid
@@ -27,9 +28,19 @@ from .capture import UnreadableClip
 from .pipeline import run
 
 app = FastAPI(title="SartorIA measurement engine", version="0.1.0")
+
+# Local development by default. Deployments set SARTORIA_ALLOWED_ORIGINS to the
+# front end's real origin — a comma-separated list, no trailing slashes.
+_origins = [o.strip().rstrip("/") for o in os.environ.get(
+    "SARTORIA_ALLOWED_ORIGINS",
+    "http://localhost:3000,http://127.0.0.1:3000").split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=_origins,
+    # Vercel gives every deployment its own hostname, so the preview URLs are
+    # matched by pattern rather than listed one by one.
+    allow_origin_regex=os.environ.get("SARTORIA_ALLOWED_ORIGIN_REGEX") or None,
     allow_methods=["POST", "GET"],
     allow_headers=["*"],
 )

@@ -3,6 +3,7 @@
 Everything in here is a calibration target, not a truth. The whole point of the
 spike is to find out which of these numbers are wrong and by how much.
 """
+import os
 from dataclasses import dataclass
 
 # ── capture gates (the deck's blocking checks) ──────────────────────────────
@@ -57,7 +58,10 @@ POSE_MODEL_URL = (
     "https://storage.googleapis.com/mediapipe-models/pose_landmarker/"
     "pose_landmarker_heavy/float16/latest/pose_landmarker_heavy.task"
 )
-POSE_MODEL_PATH = "models/pose_landmarker_heavy.task"
+# Overridable so a container can bake the model in at build time rather than
+# fetch 30 MB on every cold start.
+POSE_MODEL_PATH = os.environ.get(
+    "SARTORIA_POSE_MODEL", "models/pose_landmarker_heavy.task")
 
 
 @dataclass(frozen=True)
