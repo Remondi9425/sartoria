@@ -1,0 +1,5 @@
+# Tape measurements, in centimetres. One row per filmed session.
+# session_id must match the video filename without its extension.
+# Leave a cell empty if you did not measure it — empty is honest, zero is not.
+# How to measure: see README.md, "Taking the tape measurements".
+session_id,height_cm,waist,hip,thigh,knee,calf,ankle,inseam,outseam,rise

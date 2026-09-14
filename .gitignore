@@ -1,0 +1,20 @@
+# environments
+.venv/
+__pycache__/
+*.pyc
+
+# large binaries we never want in git
+models/*.task
+data/videos/
+data/frames/
+out/
+
+# secrets
+.env
+.env.local
+
+# os
+.DS_Store
+
+# tooling venv
+.venv-test/
