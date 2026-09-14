@@ -26,12 +26,11 @@ ALLOWED_ORIGINS = os.environ.get(
     "SARTORIA_ALLOWED_ORIGINS",
     "http://localhost:3000,http://127.0.0.1:3000",
 )
-# Vercel gives every deployment its own hostname, so previews are matched by
-# pattern rather than listed.
-ALLOWED_ORIGIN_REGEX = os.environ.get(
-    "SARTORIA_ALLOWED_ORIGIN_REGEX",
-    r"https://sartoria.*\.vercel\.app",
-)
+# Just the Vercel project name. serve.py builds the preview-URL pattern from it
+# with re.escape — a regex with backslashes cannot survive being carried into a
+# container image as an environment variable, because the Dockerfile parser
+# rejects the escape sequences before Python ever sees them.
+VERCEL_PROJECT = os.environ.get("SARTORIA_VERCEL_PROJECT", "sartoria")
 
 
 def _bake_model() -> None:
@@ -70,7 +69,7 @@ image = (
     .env({
         "SARTORIA_POSE_MODEL": MODEL_PATH,
         "SARTORIA_ALLOWED_ORIGINS": ALLOWED_ORIGINS,
-        "SARTORIA_ALLOWED_ORIGIN_REGEX": ALLOWED_ORIGIN_REGEX,
+        "SARTORIA_VERCEL_PROJECT": VERCEL_PROJECT,
     })
     .add_local_python_source("spike", copy=True)
     .run_function(_bake_model)

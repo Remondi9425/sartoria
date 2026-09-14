@@ -125,8 +125,14 @@ the CLI, same code the tests cover.
 .venv/bin/modal deploy modal_app.py   # a stable https URL
 ```
 
-Then put that URL into the front end: `NEXT_PUBLIC_ENGINE_URL` in Vercel's
-project settings, and redeploy.
+**Deployed:** `https://remondi9425--sartoria-engine-engine.modal.run`
+
+Put that into the front end — `NEXT_PUBLIC_ENGINE_URL` in Vercel's project
+settings — and redeploy. Measured on the live service: 8 s for a cold start,
+then about 2.5 s of processing for a short clip.
+
+CORS allows `localhost:3000` and any `https://sartoria*.vercel.app`, which
+covers every preview deployment; anything else is refused.
 
 Two things the image does on purpose. The 30 MB pose model is **baked in at
 build time**, because a service that scales to zero would otherwise download it

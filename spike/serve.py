@@ -11,6 +11,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import re
 import tempfile
 import time
 import uuid
@@ -35,12 +36,26 @@ _origins = [o.strip().rstrip("/") for o in os.environ.get(
     "SARTORIA_ALLOWED_ORIGINS",
     "http://localhost:3000,http://127.0.0.1:3000").split(",") if o.strip()]
 
+
+def _vercel_origin_regex(project: str | None) -> str | None:
+    """Every Vercel deployment gets its own hostname, so previews are matched
+    by pattern rather than listed one by one.
+
+    Built here from a plain project name rather than carried in as a regex:
+    an escaped pattern cannot survive being set as an environment variable in
+    a container image, because the Dockerfile parser rejects the escape
+    sequences before Python ever sees them.
+    """
+    if not project:
+        return None
+    name = re.escape(project.strip())
+    return "https://" + name + r"(-[a-z0-9-]+)?\.vercel\.app"
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_origins,
-    # Vercel gives every deployment its own hostname, so the preview URLs are
-    # matched by pattern rather than listed one by one.
-    allow_origin_regex=os.environ.get("SARTORIA_ALLOWED_ORIGIN_REGEX") or None,
+    allow_origin_regex=_vercel_origin_regex(os.environ.get("SARTORIA_VERCEL_PROJECT")),
     allow_methods=["POST", "GET"],
     allow_headers=["*"],
 )
