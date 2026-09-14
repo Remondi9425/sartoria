@@ -39,6 +39,7 @@ export default function App() {
   const [product, setProduct] = useState<Product | null>(null);
   const [colourId, setColourId] = useState<string>("");
   const abort = useRef<AbortController | null>(null);
+  const [engineIsStub, setEngineIsStub] = useState(true);
 
   useEffect(() => () => abort.current?.abort(), []);
 
@@ -53,7 +54,9 @@ export default function App() {
     const began = Date.now();
 
     try {
-      const result = await getEngine(scenarioFromUrl()).analyse({
+      const engine = getEngine(scenarioFromUrl());
+      setEngineIsStub(engine.isStub);
+      const result = await engine.analyse({
         heightCm,
         onProgress: setProgress,
         signal: ctrl.signal,
@@ -83,7 +86,7 @@ export default function App() {
     <Frame>
       {step === "welcome" && <Welcome onStart={start} />}
 
-      {step === "filming" && <Filming progress={progress} />}
+      {step === "filming" && <Filming progress={progress} isStub={engineIsStub} />}
 
       {step === "rejected" && rejection && (
         <Rejected result={rejection}

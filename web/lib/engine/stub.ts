@@ -13,12 +13,22 @@ import type {
 
 export type Scenario = "ok" | "no-head" | "no-turn" | "unsure";
 
-/** What the coach says while the clip is being worked through. */
+/**
+ * What the screen says while the clock runs.
+ *
+ * These describe what the real pipeline will do, which is the point of showing
+ * the flow at all. One earlier line — "Found you — head to feet" — is gone: it
+ * asserted a detection, and the stub never looks at a single frame. Someone
+ * filmed their face and got leg measurements back, which is exactly how a stub
+ * teaches people to trust a number it invented.
+ *
+ * The honesty lives in the strip across the bottom of the filming screen
+ * instead, where it does not have to compete with the product copy.
+ */
 const HINTS: [number, string][] = [
   [0.00, "Checking we can see all of you"],
-  [0.22, "Found you — head to feet"],
-  [0.45, "Following the turn"],
-  [0.68, "Reading the silhouette"],
+  [0.32, "Following the turn"],
+  [0.62, "Reading the silhouette"],
   [0.86, "Turning pixels into centimetres"],
 ];
 

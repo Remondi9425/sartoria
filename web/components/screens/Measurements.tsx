@@ -1,7 +1,7 @@
 "use client";
 
 import { LegDiagram } from "@/components/art/LegDiagram";
-import { Body, Button, Eyebrow, Footer, Note, Screen, Title } from "@/components/ui";
+import { Body, Button, Eyebrow, Footer, Note, Screen, StubBadge, Title } from "@/components/ui";
 import type { DigitalTwin } from "@/lib/engine/types";
 
 const TIER_NOTE: Record<string, string> = {
@@ -13,11 +13,25 @@ const TIER_NOTE: Record<string, string> = {
 export function Measurements({
   twin, seconds, onNext,
 }: { twin: DigitalTwin; seconds: number; onNext: () => void }) {
+  // The contract carries its own provenance, so no screen needs a flag that
+  // somebody could forget to flip when the real engine lands.
+  const stub = twin.processing_method.startsWith("stub");
   return (
     <Screen>
       <Body>
         <Eyebrow>Done — {seconds} seconds</Eyebrow>
         <Title>These are your numbers.</Title>
+
+        {stub && (
+          <div className="pt-4">
+            <StubBadge />
+            <p className="pt-2.5 text-[12px] leading-[1.5] text-mute">
+              Nothing was measured — the video was never looked at. Fixed
+              values, so the flow can be walked through before the measurement
+              engine exists.
+            </p>
+          </div>
+        )}
 
         <div className="pt-6">
           <LegDiagram twin={twin} />

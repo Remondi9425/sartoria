@@ -34,7 +34,9 @@ function useCamera(active: boolean) {
   return { ref, live };
 }
 
-export function Filming({ progress }: { progress: CaptureProgress }) {
+export function Filming({
+  progress, isStub = false,
+}: { progress: CaptureProgress; isStub?: boolean }) {
   const { ref, live } = useCamera(true);
   const pct = Math.round(progress.fraction * 100);
   const R = 26, C = 2 * Math.PI * R;
@@ -94,6 +96,17 @@ export function Filming({ progress }: { progress: CaptureProgress }) {
           Whole body in the frame · phone at hip height
         </p>
       </div>
+
+      {/* The camera is real, the analysis is not. Without this the screen is a
+          convincing lie: the ring fills, the phone sees you, and a number
+          arrives that had nothing to do with either. */}
+      {isStub && (
+        <div className="absolute inset-x-0 bottom-0 bg-amber/90 py-2 text-center">
+          <p className="text-[10px] font-semibold uppercase tracking-[.14em] text-navy-deep">
+            Demo · the camera is live, the measurement is not
+          </p>
+        </div>
+      )}
     </div>
   );
 }
