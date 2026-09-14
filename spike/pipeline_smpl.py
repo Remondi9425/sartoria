@@ -34,6 +34,9 @@ class SmplOutcome:
     scale_correction: float | None = None       # 1.0 = the model's size was right
     mean_uncertainty: float | None = None
     per_frame: list[dict[str, float]] = field(default_factory=list)
+    spreads: dict[str, float] = field(default_factory=dict)
+    probe: dict | None = None
+    frame_detail: list[dict] = field(default_factory=list)
 
 
 def run(video: str | Path, height_cm: float, session_id: str, model) -> SmplOutcome:
@@ -87,7 +90,14 @@ def run(video: str | Path, height_cm: float, session_id: str, model) -> SmplOutc
         verdict.ok = False
         return out
 
-    per_frame = [m for m in (nlf.measure_one(fm) for fm in meshes) if m]
+    out.probe = nlf.probe(meshes[len(meshes) // 2])
+    paired = [(fm, nlf.measure_one(fm)) for fm in meshes]
+    out.frame_detail = [
+        {"uncertainty": round(fm.uncertainty, 2),
+         "waist": round(m["waist"], 1), "hip": round(m["hip"], 1),
+         "thigh": round(m["thigh"], 1), "knee": round(m["knee"], 1)}
+        for fm, m in paired if m]
+    per_frame = [m for _, m in paired if m]
     out.per_frame = per_frame
     out.measured = len(per_frame)
 
@@ -98,7 +108,8 @@ def run(video: str | Path, height_cm: float, session_id: str, model) -> SmplOutc
         verdict.ok = False
         return out
 
-    values, conf = nlf.reconcile(per_frame)
+    values, conf, spreads = nlf.reconcile(per_frame)
+    out.spreads = spreads
     missing = [s for s in C.ALL_MEASUREMENTS if s not in values]
     if missing:
         verdict.blocking.append(

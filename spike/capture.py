@@ -42,6 +42,15 @@ class Verdict:
         return "Capture looks good."
 
 
+_ROTATIONS = {90: cv2.ROTATE_90_CLOCKWISE, 180: cv2.ROTATE_180,
+              270: cv2.ROTATE_90_COUNTERCLOCKWISE}
+
+
+def _rotate(img: np.ndarray, degrees: float) -> np.ndarray:
+    code = _ROTATIONS.get(int(degrees) % 360)
+    return cv2.rotate(img, code) if code is not None else img
+
+
 def read_frames(path: str | Path, target: int = C.TARGET_FRAMES) -> list[Frame]:
     """Evenly sampled frames. Sampling rather than taking the first N keeps the
     whole turn, which is where the side-on views live."""
@@ -51,6 +60,14 @@ def read_frames(path: str | Path, target: int = C.TARGET_FRAMES) -> list[Frame]:
             "We could not open that video file at all. It may be a format this "
             "browser produced that we cannot read yet — tell us which browser "
             "and phone you used.")
+    # Phones record landscape and store "rotate 90" in the container. OpenCV
+    # reads that flag but does not apply it unless asked, so an iPhone clip
+    # arrives on its side — and a body model handed a person lying down either
+    # fails outright or measures a horizontal stranger.
+    rotation = float(cap.get(cv2.CAP_PROP_ORIENTATION_META) or 0.0)
+    cap.set(cv2.CAP_PROP_ORIENTATION_AUTO, 1)
+    applied = bool(cap.get(cv2.CAP_PROP_ORIENTATION_AUTO))
+
     total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 0
     wanted = set(np.linspace(0, max(total - 1, 0), min(target, max(total, 1)),
                              dtype=int).tolist()) if total else None
@@ -61,6 +78,8 @@ def read_frames(path: str | Path, target: int = C.TARGET_FRAMES) -> list[Frame]:
         if not ok:
             break
         if wanted is None or i in wanted:
+            if rotation and not applied:          # older builds ignore the flag
+                img = _rotate(img, rotation)
             grey = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             frames.append(Frame(
                 index=i, image=img,

@@ -84,19 +84,110 @@ def test_a_leg_is_measured_alone_not_together_with_its_twin():
     both = np.vstack([left, right])
     assert M.girth_at(both, 40.0, band=1.0, near_x=12.0) == pytest.approx(
         2 * math.pi * 6.0, rel=3e-3)
-    # without near_x the hull wraps both legs and reads far too large
+    # both legs are substantial, so neither is discarded as a speck; the hull
+    # round the pair is what near_x exists to avoid
     assert M.girth_at(both, 40.0, band=1.0) > 2 * math.pi * 6.0 * 1.5
 
 
-def test_crotch_is_found_where_the_legs_part():
+def test_crotch_sits_just_below_the_hip_joints():
     torso = cylinder(16.0, 11.0, 90, 140)
     left = cylinder(7.0, 7.0, 0, 90, cx=-9.0)
     right = cylinder(7.0, 7.0, 0, 90, cx=9.0)
     body = np.vstack([torso, left, right])
-    y = M.crotch_height(body, y_hip=120.0, y_knee=40.0, band=1.0)
-    assert y is not None and y == pytest.approx(90.0, abs=4.0)
+    y = M.crotch_height(body, hip_l=np.array([-9.0, 95.0, 0.0]),
+                        hip_r=np.array([9.0, 95.0, 0.0]),
+                        pelvis=np.array([0.0, 95.0, 0.0]), height_cm=140.0)
+    # Either the anatomical estimate (91.1) or, where the mid-line really is
+    # air, what the body itself shows — both are within a couple of cm.
+    assert y == pytest.approx(90.5, abs=1.5)
 
 
 def test_a_slice_with_nothing_in_it_returns_nothing_rather_than_zero():
     pts = cylinder(10.0, 10.0, 0, 10)
     assert M.girth_at(pts, 500.0, band=0.5) is None
+
+
+# ── the arms ────────────────────────────────────────────────────────────────
+def torso_with_arms():
+    """A torso with an arm hanging beside it, as a body does when standing."""
+    torso = cylinder(15.0, 11.0, 0, 100)
+    # Arms hang outside the torso's own outline, which is why they matter.
+    arm_l = cylinder(5.0, 5.0, 20, 95, cx=-21.0)
+    arm_r = cylinder(5.0, 5.0, 20, 95, cx=21.0)
+    return np.vstack([torso, arm_l, arm_r]), torso
+
+
+def test_a_hull_round_a_slice_swallows_the_arms():
+    """The failure this is all about: on a real recording the waist read 149 cm."""
+    body, torso = torso_with_arms()
+    naive = M.girth_at(body, 50.0, band=1.0)
+    truth = M.girth_at(torso, 50.0, band=1.0)
+    # The exact factor depends on how far the arms hang; the direction and the
+    # scale of the error are the point. On the real clip it turned 85 cm into 149.
+    assert naive > truth * 1.3, "expected the arms to inflate the reading"
+
+
+def test_stripping_the_arm_chain_restores_the_torso():
+    body, torso = torso_with_arms()
+    # the joint chain the pose model gives us: shoulder, elbow, wrist
+    arms = [np.array([[-21.0, 95, 0], [-21.0, 57, 0], [-21.0, 20, 0]]),
+            np.array([[21.0, 95, 0], [21.0, 57, 0], [21.0, 20, 0]])]
+    stripped = M.strip_chains(body, arms, radius=7.0)
+    assert M.girth_at(stripped, 50.0, band=1.0) == pytest.approx(
+        M.girth_at(torso, 50.0, band=1.0), rel=0.02)
+
+
+def test_stripping_leaves_the_legs_alone():
+    """Arm removal must not eat the thing being measured."""
+    legs = np.vstack([cylinder(7.0, 7.0, 0, 80, cx=-10.0),
+                      cylinder(7.0, 7.0, 0, 80, cx=10.0)])
+    hands = np.vstack([cylinder(4.0, 4.0, 60, 80, cx=-26.0),
+                       cylinder(4.0, 4.0, 60, 80, cx=26.0)])
+    arms = [np.array([[-26.0, 80, 0], [-26.0, 60, 0]]),
+            np.array([[26.0, 80, 0], [26.0, 60, 0]])]
+    stripped = M.strip_chains(np.vstack([legs, hands]), arms, radius=7.0)
+    assert M.girth_at(stripped, 70.0, band=1.0, near_x=10.0) == pytest.approx(
+        2 * math.pi * 7.0, rel=0.03)
+
+
+def test_a_few_stray_points_do_not_drag_the_hull_out():
+    """A convex hull is decided by its extremes and has no robustness at all.
+
+    Leftover fingertip vertices did this to the seat measurement: 98 cm read
+    as 197.
+    """
+    torso = cylinder(15.0, 11.0, 40, 60)
+    fingertips = np.array([[34.0, 50.0, 1.0], [35.0, 50.5, -1.0],
+                           [-34.0, 50.0, 0.5], [-35.5, 49.6, 0.0]])
+    truth = M.girth_at(torso, 50.0, band=1.0)
+    polluted = M.girth_at(np.vstack([torso, fingertips]), 50.0, band=1.0)
+    assert polluted == pytest.approx(truth, rel=0.03)
+
+
+def test_specks_go_but_substantial_pieces_stay():
+    """Keeping only the largest group would under-measure a torso that arm
+    stripping had cut into two arcs — worse than over-measuring, because it
+    looks reasonable."""
+    rng = np.random.default_rng(0)
+    left = rng.uniform(-1, 1, (120, 2)) + np.array([-20.0, 0.0])
+    right = rng.uniform(-1, 1, (110, 2)) + np.array([20.0, 0.0])
+    speck = np.array([[300.0, 300.0], [301.0, 300.0]])
+    kept = M.drop_specks(np.vstack([left, right, speck]))
+    assert len(kept) == 230, "both arcs should survive, the speck should not"
+
+
+def test_every_vertex_belongs_to_the_bone_it_is_nearest():
+    """The rule that replaced removing limbs by proximity.
+
+    A hand hangs beside a thigh, so any sphere wide enough to clear the fingers
+    also eats the outside of the leg. Ownership has no such conflict.
+    """
+    thigh = cylinder(8.6, 8.6, 60, 80, cx=-9.5, n_ring=40, n_layer=40)
+    hand = cylinder(5.0, 5.0, 66, 78, cx=-21.0, n_ring=40, n_layer=40)
+    arm = np.array([[-21.0, 100.0, 0.0], [-21.0, 72.0, 0.0]])
+    leg = np.array([[-9.5, 88.0, 0.0], [-9.5, 50.0, 0.0]])
+
+    pts = np.vstack([thigh, hand])
+    label = M.label_by_nearest_chain(pts, [arm, leg])
+    assert (label[:len(thigh)] == 1).mean() > 0.95, "the thigh should stay a leg"
+    assert (label[len(thigh):] == 0).mean() > 0.95, "the hand should stay an arm"

@@ -92,7 +92,10 @@ app = modal.App("sartoria-engine", image=base)
     gpu="T4",             # the weights are a ViT-L; a T4 runs a clip in seconds
     memory=16384,
     timeout=600,
-    scaledown_window=240,
+    # Short on purpose: a container warm from the previous version keeps
+    # serving after a redeploy, and while iterating that reads as "the change
+    # did not land". Raise it once the code settles.
+    scaledown_window=60,
     max_containers=2,
 )
 def measure(clip: bytes, height_cm: float, session_id: str, suffix: str = ".mp4") -> dict:
@@ -125,6 +128,11 @@ def measure(clip: bytes, height_cm: float, session_id: str, suffix: str = ".mp4"
             "measured_frames": out.measured,
             "scale_correction": out.scale_correction,
             "mean_vertex_uncertainty": out.mean_uncertainty,
+            # How far the frames disagree, per site. With no tape measure inside
+            # the pipeline this is the only evidence a number is real.
+            "spread_cm": out.spreads,
+            "probe": out.probe,
+            "per_frame": out.frame_detail,
         }
         return body
     finally:
