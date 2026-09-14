@@ -28,9 +28,17 @@ class SiteResult:
 
 
 def load_truth(path: str | Path) -> dict[str, dict[str, float]]:
+    """Rows from the tape-measurement file.
+
+    Comment lines are dropped before the header is read: the template starts
+    with instructions, and csv.DictReader would otherwise take the first of
+    them as the column names and find no data at all.
+    """
     out: dict[str, dict[str, float]] = {}
     with open(path, newline="", encoding="utf-8") as f:
-        for row in csv.DictReader(f):
+        lines = [ln for ln in f if not ln.lstrip().startswith("#")]
+    if True:
+        for row in csv.DictReader(lines):
             sid = (row.get("session_id") or "").strip()
             if not sid or sid.startswith("#"):
                 continue
@@ -92,6 +100,17 @@ def verdict(results: list[SiteResult]) -> str:
     key = {r.name: r for r in results if r.name in ("waist", "inseam")}
     if len(key) < 2:
         return "NO VERDICT — waist and inseam both need ground truth"
+
+    # Removing a bias measured on a handful of people and then reporting the
+    # error as gone is circular. Below this many, say what was seen and refuse
+    # to draw the conclusion.
+    n = min(r.n for r in key.values())
+    if n < 5:
+        worst_raw = max(r.mae_cm for r in key.values())
+        return (f"NO VERDICT — {n} "
+                f"{'person' if n == 1 else 'people'} is not a sample. Worst of "
+                f"waist/inseam so far: {worst_raw:.1f} cm. A per-site bias "
+                f"cannot be separated from one body's idiosyncrasy yet.")
     worst = max(r.mae_cm for r in key.values())
     corrected = max(abs(r.mae_cm - abs(r.bias_cm)) for r in key.values())
     if worst <= 2.0:
