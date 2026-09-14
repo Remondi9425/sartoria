@@ -16,8 +16,8 @@ const PHASES: [number, string][] = [
   [0.00, "Sending your clip"],
   [0.15, "Looking for you in the frames"],
   [0.40, "Checking head and feet are in shot"],
-  [0.62, "Following the turn"],
-  [0.82, "Turning pixels into centimetres"],
+  [0.62, "Fitting a body to the frames"],
+  [0.82, "Measuring round the mesh"],
 ];
 
 const UNKNOWN_QUALITY: CaptureQuality = {
@@ -75,8 +75,8 @@ export function createHttpEngine(baseUrl: string): MeasurementEngine {
         });
         if (!res.ok) {
           return rejected(
-            `The measurement engine answered ${res.status}. It may not be ` +
-            `running — start it with: uvicorn spike.serve:app --port 8000`);
+            `The measurement engine answered ${res.status}. Check the Modal ` +
+            `deployment is up: modal app list`);
         }
 
         const body = await res.json();

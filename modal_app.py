@@ -1,15 +1,18 @@
 """The measurement engine on Modal.
 
-    .venv/bin/modal serve modal_app.py      # live-reloading, for trying it
-    .venv/bin/modal deploy modal_app.py     # a stable URL
+    .venv/bin/modal deploy modal_app.py
 
-Serves exactly the FastAPI app in spike/serve.py, so the container runs the same
-code as the laptop and the same code the tests cover.
+Two things live here. The SMPL engine needs a GPU and half a gigabyte of
+weights, so it runs as its own function; the web layer in front of it is a
+plain container. Keeping them apart means an HTTP request that never reaches
+the model does not pay for a GPU.
 
-No GPU. The silhouette method is MediaPipe on CPU and takes a few seconds for a
-ten-second clip; a GPU here would be paid for and idle. If the spike says the
-method needs a heavier model, add `gpu="T4"` to the decorator and nothing else
-changes — which is the actual argument for being on Modal rather than a box.
+Nothing heavy is ever installed on a laptop: torch and the NLF weights exist
+only inside these images.
+
+Licence: the NLF code is MIT, but the released weights are for **noncommercial
+research use**. Correct for a Project Work; a blocker for a business, and one
+to settle deliberately rather than discover later.
 """
 from __future__ import annotations
 
@@ -18,74 +21,125 @@ import os
 import modal
 
 MODEL_DIR = "/opt/models"
-MODEL_PATH = f"{MODEL_DIR}/pose_landmarker_heavy.task"
+NLF_PATH = f"{MODEL_DIR}/nlf_l_multi.torchscript"
 
-# The front end's origin. Set it at deploy time:
-#   modal deploy modal_app.py   (after editing, or via a Modal secret)
-ALLOWED_ORIGINS = os.environ.get(
-    "SARTORIA_ALLOWED_ORIGINS",
-    "http://localhost:3000,http://127.0.0.1:3000",
-)
 # Just the Vercel project name. serve.py builds the preview-URL pattern from it
 # with re.escape — a regex with backslashes cannot survive being carried into a
 # container image as an environment variable, because the Dockerfile parser
 # rejects the escape sequences before Python ever sees them.
 VERCEL_PROJECT = os.environ.get("SARTORIA_VERCEL_PROJECT", "sartoria")
+ALLOWED_ORIGINS = os.environ.get(
+    "SARTORIA_ALLOWED_ORIGINS",
+    "http://localhost:3000,http://127.0.0.1:3000",
+)
+
+COMMON_ENV = {
+    "SARTORIA_ALLOWED_ORIGINS": ALLOWED_ORIGINS,
+    "SARTORIA_VERCEL_PROJECT": VERCEL_PROJECT,
+    "SARTORIA_NLF_MODEL": NLF_PATH,
+}
 
 
-def _bake_model() -> None:
-    """Fetch the pose model at image build time.
+def _bake_nlf() -> None:
+    """Fetch the NLF weights at image build time.
 
-    Downloading 30 MB on every cold start would put it on the critical path of
-    the first request after an idle period, which is most requests when a
-    service scales to zero.
+    Half a gigabyte on the critical path of every cold start would be most of
+    the wait, on a service that scales to zero.
     """
     import pathlib
     from urllib.request import urlopen
 
-    from spike.config import POSE_MODEL_URL
+    from spike.nlf import NLF_WEIGHTS_URL
 
-    p = pathlib.Path(MODEL_PATH)
+    p = pathlib.Path(NLF_PATH)
     p.parent.mkdir(parents=True, exist_ok=True)
-    with urlopen(POSE_MODEL_URL) as r, open(p, "wb") as f:
-        f.write(r.read())
+    with urlopen(NLF_WEIGHTS_URL) as r, open(p, "wb") as f:
+        while chunk := r.read(1 << 22):
+            f.write(chunk)
     size = p.stat().st_size
-    assert size > 1_000_000, f"model download looks wrong: {size} bytes"
-    print(f"baked pose model: {size / 1e6:.1f} MB")
+    assert size > 100_000_000, f"weights look wrong: {size} bytes"
+    print(f"baked NLF weights: {size / 1e6:.0f} MB")
 
 
-image = (
+base = (
     modal.Image.debian_slim(python_version="3.12")
-    # OpenCV needs these even in the headless build; without them `import cv2`
-    # fails at container start with a bare ImportError.
+    # OpenCV needs these even headless; without them `import cv2` fails at
+    # container start with a bare ImportError.
     .apt_install("libgl1", "libglib2.0-0")
     .pip_install(
-        "mediapipe==0.10.21",
         "opencv-python-headless>=4.10",
         "numpy>=1.26,<2",
         "fastapi>=0.115",
         "python-multipart>=0.0.9",
     )
-    .env({
-        "SARTORIA_POSE_MODEL": MODEL_PATH,
-        "SARTORIA_ALLOWED_ORIGINS": ALLOWED_ORIGINS,
-        "SARTORIA_VERCEL_PROJECT": VERCEL_PROJECT,
-    })
+    .env(COMMON_ENV)
     .add_local_python_source("spike", copy=True)
-    .run_function(_bake_model)
 )
 
-app = modal.App("sartoria-engine", image=image)
+gpu_image = (
+    base.pip_install(
+        "torch==2.5.1", "torchvision==0.20.1",
+        index_url="https://download.pytorch.org/whl/cu121",
+    )
+    .run_function(_bake_nlf)
+)
+
+app = modal.App("sartoria-engine", image=base)
 
 
 @app.function(
-    cpu=2.0,            # MediaPipe is happy on two cores; more buys little
-    memory=4096,        # frames of a 1080p clip add up
-    timeout=300,
+    image=gpu_image,
+    gpu="T4",             # the weights are a ViT-L; a T4 runs a clip in seconds
+    memory=16384,
+    timeout=600,
+    scaledown_window=240,
+    max_containers=2,
+)
+def measure(clip: bytes, height_cm: float, session_id: str, suffix: str = ".mp4") -> dict:
+    """One clip in, one twin — or a refusal with a named cause."""
+    import json
+    import tempfile
+    from pathlib import Path
+
+    from spike import nlf, twin as T
+    from spike.pipeline_smpl import run
+
+    global _MODEL
+    try:
+        _MODEL
+    except NameError:
+        _MODEL = nlf.load_model(NLF_PATH)
+
+    tmp = Path(tempfile.mkstemp(suffix=suffix)[1])
+    try:
+        tmp.write_bytes(clip)
+        out = run(tmp, height_cm, session_id, _MODEL)
+        if out.twin is not None:
+            body = json.loads(out.twin.to_json())
+            body["status"] = "ok"
+        else:
+            body = json.loads(T.refused(session_id, height_cm, out.verdict, out.quality))
+        body["diagnostics"] = {
+            "frames_read": out.frames_read,
+            "meshes": out.meshes,
+            "measured_frames": out.measured,
+            "scale_correction": out.scale_correction,
+            "mean_vertex_uncertainty": out.mean_uncertainty,
+        }
+        return body
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+@app.function(
+    image=base,
+    cpu=1.0,
+    memory=2048,
+    timeout=700,
     scaledown_window=300,
-    max_containers=4,
 )
 @modal.asgi_app()
 def engine():
-    from spike.serve import app as fastapi_app
-    return fastapi_app
+    """The HTTP front. Cheap, always warm-ish, and it calls the GPU function."""
+    from spike.serve import make_app
+    return make_app(measure_fn=measure.remote)

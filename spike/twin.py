@@ -12,10 +12,17 @@ from datetime import datetime, timezone
 from typing import Any
 
 from . import config as C
-from .body import Measurement
 from .capture import Verdict
 
-METHOD = "silhouette_ellipse_v1"
+METHOD = "nlf_smpl_hull_v1"
+
+
+@dataclass
+class Measurement:
+    """One number, and how much to trust it."""
+    cm: float
+    quality: str                # high | medium | low
+    note: str = ""
 
 
 @dataclass

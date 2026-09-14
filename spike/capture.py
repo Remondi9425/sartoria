@@ -13,7 +13,6 @@ import cv2
 import numpy as np
 
 from . import config as C
-from . import geometry as G
 
 
 class UnreadableClip(RuntimeError):
@@ -75,57 +74,3 @@ def read_frames(path: str | Path, target: int = C.TARGET_FRAMES) -> list[Frame]:
             "The video opened but contained no readable frames. Record again, "
             "and let it run the full ten seconds before stopping.")
     return frames
-
-
-def judge(masks: list[np.ndarray], frames: list[Frame],
-          yaws: list[float]) -> Verdict:
-    """The gates, applied to the clip as a whole."""
-    v = Verdict(ok=True)
-    if not masks:
-        v.blocking.append(
-            "We could not find a person in this clip. Film your whole body, "
-            "head to feet, against a plain background.")
-        v.ok = False
-        return v
-
-    borders = [G.touches_border(m, C.EDGE_MARGIN_PX) for m in masks]
-    frac = lambda k: sum(b[k] for b in borders) / len(borders)
-
-    if frac("top") > 0.5:
-        v.blocking.append(
-            "We can't see the top of your head. We need your full body, head "
-            "to feet, to turn the scan into centimetres — move the phone "
-            "further away and record again.")
-    if frac("bottom") > 0.5:
-        v.blocking.append(
-            "Your feet are cut off. Without them there is nothing to measure "
-            "the leg against — step back and record again.")
-    if frac("left") > 0.5 or frac("right") > 0.5:
-        v.blocking.append(
-            "You are wider than the frame. Hold the phone upright and step back.")
-    if len(masks) < C.MIN_USABLE_FRAMES:
-        v.blocking.append(
-            f"Only {len(masks)} usable frames — we need at least "
-            f"{C.MIN_USABLE_FRAMES}. Film for about ten seconds.")
-
-    areas = [m.mean() for m in masks]
-    if float(np.mean(areas)) < C.MIN_MASK_AREA_FRAC:
-        v.blocking.append(
-            "You are too far away to measure accurately. Come closer, keeping "
-            "your whole body in frame.")
-
-    cov = G.rotation_coverage(yaws)
-    if cov < C.ROTATION_COVERAGE_MIN:
-        v.coaching.append(
-            "Turn all the way round slowly — we only saw you from a narrow "
-            "range of angles, and the side view is what gives depth.")
-    if float(np.median([f.blur for f in frames])) < C.BLUR_LAPLACIAN_MIN:
-        v.coaching.append("The video is a little soft — hold the phone still.")
-    b = float(np.median([f.brightness for f in frames]))
-    if b < C.BRIGHTNESS_MIN:
-        v.coaching.append("It is quite dark — try a brighter room.")
-    elif b > C.BRIGHTNESS_MAX:
-        v.coaching.append("The shot is blown out — move away from the window.")
-
-    v.ok = not v.blocking
-    return v
