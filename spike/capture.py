@@ -16,6 +16,10 @@ from . import config as C
 from . import geometry as G
 
 
+class UnreadableClip(RuntimeError):
+    """The bytes never became frames — a decoder problem, not a capture one."""
+
+
 @dataclass
 class Frame:
     index: int
@@ -44,7 +48,10 @@ def read_frames(path: str | Path, target: int = C.TARGET_FRAMES) -> list[Frame]:
     whole turn, which is where the side-on views live."""
     cap = cv2.VideoCapture(str(path))
     if not cap.isOpened():
-        raise FileNotFoundError(f"cannot open video: {path}")
+        raise UnreadableClip(
+            "We could not open that video file at all. It may be a format this "
+            "browser produced that we cannot read yet — tell us which browser "
+            "and phone you used.")
     total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 0
     wanted = set(np.linspace(0, max(total - 1, 0), min(target, max(total, 1)),
                              dtype=int).tolist()) if total else None
@@ -64,7 +71,9 @@ def read_frames(path: str | Path, target: int = C.TARGET_FRAMES) -> list[Frame]:
         i += 1
     cap.release()
     if not frames:
-        raise ValueError(f"no frames decoded from {path}")
+        raise UnreadableClip(
+            "The video opened but contained no readable frames. Record again, "
+            "and let it run the full ten seconds before stopping.")
     return frames
 
 

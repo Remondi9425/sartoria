@@ -91,7 +91,29 @@ separate problem, and it belongs to the Catalog Ingestor, not here.
 
 ---
 
-## Running
+## Running as a service
+
+The same pipeline behind HTTP, which is how the web app reaches it:
+
+```bash
+.venv/bin/uvicorn spike.serve:app --port 8000 --reload
+```
+
+| endpoint | what it gives back |
+|---|---|
+| `POST /analyse` | the twin, or a refusal with a named cause — never a bare 500 |
+| `POST /debug` | the same run, plus annotated frames showing every level it chose |
+| `GET /health` | is it up |
+
+Then set `NEXT_PUBLIC_ENGINE_URL=http://127.0.0.1:8000` in `web/.env.local` and
+the customer app measures for real instead of inventing numbers.
+
+Verified: a clip recorded in Chrome comes back as **VP9 inside an MP4
+container**, which is an odd pairing, and OpenCV decodes it — 84 frames from a
+3-second capture. A clip it genuinely cannot open now says so specifically,
+rather than being reported as "no person in the clip".
+
+## Running on a file
 
 ```bash
 # one clip
@@ -104,6 +126,18 @@ for v in data/videos/*.mp4; do
 done
 .venv/bin/python scripts/evaluate.py
 ```
+
+When a number looks wrong, look before changing a constant:
+
+```bash
+python scripts/debug_clip.py data/videos/andrea.mp4 --height 178
+```
+
+That writes `out/debug/front.png` with the mask edge, the crown and heel rows,
+the crotch, and every measurement level drawn where the code chose it — plus
+the width it read at each one. Most failures are not arithmetic: they are the
+waist landing on a belt, the mask swallowing an arm, or the crotch found at the
+knees.
 
 `evaluate.py` prints a per-site table and a verdict. The column that matters
 most is **bias**, not MAE: random error averages away with more frames, but a

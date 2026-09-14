@@ -18,7 +18,7 @@ import type {
 } from "@/lib/engine/types";
 
 type Step =
-  | "welcome" | "filming" | "rejected" | "wardrobe"
+  | "welcome" | "filming" | "analysing" | "rejected" | "wardrobe"
   | "measurements" | "choosing" | "product" | "checkout" | "feedback";
 
 /** ?demo=no-head, ?demo=no-turn, ?demo=unsure — so the refusal paths can be
@@ -43,10 +43,18 @@ export default function App() {
 
   useEffect(() => () => abort.current?.abort(), []);
 
-  const start = useCallback(async (heightCm: number) => {
+  const start = useCallback((heightCm: number) => {
     setHeight(heightCm);
     setStep("filming");
-    setProgress({ fraction: 0, hint: "Checking we can see all of you" });
+    setProgress({ fraction: 0, hint: "" });
+    setEngineIsStub(getEngine(scenarioFromUrl()).isStub);
+  }, []);
+
+  // Handed the recorded clip when the ten seconds are up. Only now does any
+  // measuring start — before this there was nothing to measure.
+  const analyse = useCallback(async (clip: Blob | null) => {
+    setStep("analysing");
+    setProgress({ fraction: 0, hint: "Sending your clip" });
 
     abort.current?.abort();
     const ctrl = new AbortController();
@@ -57,7 +65,8 @@ export default function App() {
       const engine = getEngine(scenarioFromUrl());
       setEngineIsStub(engine.isStub);
       const result = await engine.analyse({
-        heightCm,
+        heightCm: height,
+        video: clip ?? undefined,
         onProgress: setProgress,
         signal: ctrl.signal,
       });
@@ -72,6 +81,24 @@ export default function App() {
     } catch (e) {
       if ((e as Error)?.name !== "AbortError") throw e;
     }
+  }, [height]);
+
+  // No camera, no clip. Rather than fail silently, say so and offer the way in
+  // that never needed one.
+  const cameraDenied = useCallback(() => {
+    setRejection({
+      status: "capture_rejected",
+      reason: "We could not open your camera. Allow camera access and try " +
+              "again, or tell us a pair of jeans you already own.",
+      all_reasons: ["camera unavailable or permission denied"],
+      coaching: [],
+      capture_quality: {
+        head_visible: null, feet_visible: null, body_in_frame: null,
+        usable_frames: 0, rotation_coverage: 0,
+        frontal_yaw_deg: null, profile_yaw_deg: null,
+      },
+    });
+    setStep("rejected");
   }, []);
 
   const anchor = useCallback((p: Product, size: string) => {
@@ -86,7 +113,11 @@ export default function App() {
     <Frame>
       {step === "welcome" && <Welcome onStart={start} />}
 
-      {step === "filming" && <Filming progress={progress} isStub={engineIsStub} />}
+      {(step === "filming" || step === "analysing") && (
+        <Filming phase={step === "filming" ? "recording" : "analysing"}
+                 progress={progress} isStub={engineIsStub}
+                 onRecorded={analyse} onCameraDenied={cameraDenied} />
+      )}
 
       {step === "rejected" && rejection && (
         <Rejected result={rejection}
