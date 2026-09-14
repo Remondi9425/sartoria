@@ -20,11 +20,35 @@ const PHASES: [number, string][] = [
   [0.82, "Measuring round the mesh"],
 ];
 
+const POLL_MS = 2_000;
+const MAX_POLLS = 150;          // five minutes, well past a cold start
+
+const sleep = (ms: number, signal?: AbortSignal) =>
+  new Promise<void>((resolve, reject) => {
+    const t = setTimeout(resolve, ms);
+    signal?.addEventListener("abort", () => {
+      clearTimeout(t);
+      reject(new DOMException("aborted", "AbortError"));
+    }, { once: true });
+  });
+
 const UNKNOWN_QUALITY: CaptureQuality = {
   head_visible: null, feet_visible: null, body_in_frame: null,
   usable_frames: 0, rotation_coverage: 0,
   frontal_yaw_deg: null, profile_yaw_deg: null,
 };
+
+/** A refusal the worker produced, passed through unchanged. */
+function asRejection(body: Record<string, unknown>): CaptureResult {
+  return {
+    status: "capture_rejected",
+    reason: String(body.reason ?? "That capture could not be used."),
+    all_reasons: (body.all_reasons as string[]) ?? [String(body.reason ?? "")],
+    coaching: (body.coaching as string[]) ?? [],
+    capture_quality: (body.capture_quality as CaptureQuality) ?? UNKNOWN_QUALITY,
+  };
+}
+
 
 function rejected(reason: string, quality = UNKNOWN_QUALITY): CaptureResult {
   return {
@@ -47,61 +71,62 @@ export function createHttpEngine(baseUrl: string): MeasurementEngine {
           "No video reached us. Allow camera access and record again.");
       }
 
-      // The request is one round trip with no streaming, so the bar is a
-      // plausible wait rather than a measurement. It stops short of the end and
-      // only completes when the answer actually lands.
-      let stop = false;
       const began = Date.now();
-      const tick = () => {
-        if (stop) return;
-        const f = Math.min(0.93, (Date.now() - began) / 14000);
-        const hint = [...PHASES].reverse().find(([at]) => f >= at)?.[1] ?? PHASES[0][1];
-        onProgress?.({ fraction: f, hint });
-        requestAnimationFrame(tick);
+      const tick = (fraction: number) => {
+        const hint = [...PHASES].reverse().find(([at]) => fraction >= at)?.[1]
+                     ?? PHASES[0][1];
+        onProgress?.({ fraction, hint });
       };
-      tick();
 
       try {
+        // Upload first. The server answers as soon as it has the bytes — it
+        // does not hold the connection open while a GPU works, because a
+        // request kept alive for two minutes does not survive the round trip.
         const form = new FormData();
-        // Name the part after what was actually recorded. Chrome hands back
-        // VP9 inside an MP4 container, which decodes fine — but only if the
-        // decoder is not told it is looking at something else.
-        const ext = video.type.includes("mp4") ? "mp4" : "webm";
+        const ext = video.type.includes("mp4") ? "mp4"
+                  : video.type.includes("quicktime") ? "mov" : "webm";
         form.append("video", video, `clip.${ext}`);
         form.append("height_cm", String(heightCm));
 
-        const res = await fetch(`${baseUrl}/analyse`, {
+        tick(0.05);
+        const submit = await fetch(`${baseUrl}/analyse`, {
           method: "POST", body: form, signal,
         });
-        if (!res.ok) {
+        if (!submit.ok && submit.status !== 202) {
           return rejected(
-            `The measurement engine answered ${res.status}. Check the Modal ` +
+            `The measurement engine answered ${submit.status}. Check the Modal ` +
             `deployment is up: modal app list`);
         }
-
-        const body = await res.json();
-        onProgress?.({ fraction: 1, hint: "Done" });
-
-        if (body.status === "capture_rejected") {
-          return {
-            status: "capture_rejected",
-            reason: body.reason,
-            all_reasons: body.all_reasons ?? [body.reason],
-            coaching: body.coaching ?? [],
-            capture_quality: body.capture_quality ?? UNKNOWN_QUALITY,
-          };
+        const ticket = await submit.json();
+        if (ticket.status === "capture_rejected") return asRejection(ticket);
+        if (!ticket.job_id) {
+          return rejected("The engine accepted the clip but gave us nothing to wait on.");
         }
-        // strip the transport-only fields; the rest is the twin verbatim
-        delete body.status;
-        delete body.took_seconds;
-        return { status: "ok", twin: body as DigitalTwin, coaching: [] };
+
+        // Then wait. A cold container takes about two minutes; a warm one
+        // twenty seconds. The bar reflects elapsed time honestly and stops
+        // short of the end, because we are not told how far along it is.
+        for (let i = 0; i < MAX_POLLS; i++) {
+          await sleep(POLL_MS, signal);
+          tick(Math.min(0.94, 0.05 + (Date.now() - began) / 150_000));
+          const res = await fetch(`${baseUrl}/result/${ticket.job_id}`, { signal });
+          if (!res.ok) continue;
+          const body = await res.json();
+          if (body.status === "working") continue;
+
+          onProgress?.({ fraction: 1, hint: "Done" });
+          if (body.status === "capture_rejected") return asRejection(body);
+          delete body.status;
+          delete body.took_seconds;
+          return { status: "ok", twin: body as DigitalTwin, coaching: [] };
+        }
+        return rejected(
+          "The measurement is taking longer than it should. Try again in a moment.");
       } catch (e) {
         if ((e as Error)?.name === "AbortError") throw e;
         return rejected(
           "We could not reach the measurement engine. Check it is running on " +
           `${baseUrl}.`);
-      } finally {
-        stop = true;
       }
     },
   };

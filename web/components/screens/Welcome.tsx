@@ -1,10 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Body, Button, Footer, Note, Screen, StubBadge } from "@/components/ui";
 
-export function Welcome({ onStart }: { onStart: (heightCm: number) => void }) {
+export function Welcome({
+  onStart, onUseFile,
+}: {
+  onStart: (heightCm: number) => void;
+  onUseFile: (heightCm: number, clip: File) => void;
+}) {
   const [height, setHeight] = useState(174);
+  const file = useRef<HTMLInputElement>(null);
   const step = (d: number) => setHeight((h) => Math.min(210, Math.max(140, h + d)));
 
   return (
@@ -51,6 +57,18 @@ export function Welcome({ onStart }: { onStart: (heightCm: number) => void }) {
 
       <Footer>
         <Button onClick={() => onStart(height)}>Start filming</Button>
+        <div className="pt-2.5 text-center">
+          <button type="button" onClick={() => file.current?.click()}
+                  className="text-[12.5px] text-navy underline underline-offset-4
+                             hover:text-rust">
+            Or use a video you already have
+          </button>
+          <input ref={file} type="file" accept="video/*" className="hidden"
+                 onChange={(e) => {
+                   const f = e.target.files?.[0];
+                   if (f) onUseFile(height, f);
+                 }} />
+        </div>
         <div className="pt-3 text-center">
           <Note>The video is never saved. Only your measurements are.</Note>
         </div>

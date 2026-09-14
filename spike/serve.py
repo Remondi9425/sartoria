@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import os
 import re
-import time
 import uuid
 from dataclasses import asdict
 from typing import Any, Callable, Protocol
@@ -27,9 +26,15 @@ from . import twin as T
 MAX_BYTES = 80 * 1024 * 1024
 
 
-class MeasureFn(Protocol):
+class SubmitFn(Protocol):
+    """Start the measurement and return a handle. Must not block."""
     def __call__(self, clip: bytes, height_cm: float, session_id: str,
-                 suffix: str) -> dict[str, Any]: ...
+                 suffix: str) -> str: ...
+
+
+class PollFn(Protocol):
+    """The result if it is ready, or None."""
+    def __call__(self, job_id: str) -> dict[str, Any] | None: ...
 
 
 def _vercel_origin_regex(project: str | None) -> str | None:
@@ -61,7 +66,20 @@ def _refusal(sid: str, height_cm: float, reason: str,
     }
 
 
-def make_app(measure_fn: MeasureFn | Callable[..., dict]) -> FastAPI:
+def make_app(submit_fn: SubmitFn | Callable[..., str],
+             poll_fn: PollFn | Callable[..., Any]) -> FastAPI:
+    """Submit-and-poll, not one long request.
+
+    Measuring takes twenty seconds warm and nearly two minutes cold, and a
+    request held open that long does not survive: the platform answers a 303
+    redirect to a polling URL, which curl cannot follow across the method
+    change and a browser rejects outright — "Failed to fetch" after 150
+    seconds, with no useful error.
+
+    So the upload returns a job id as soon as the bytes are in, and the client
+    asks for the result. Which is what should have been built anyway: a phone
+    on a slow connection should not be holding a GPU open while it uploads.
+    """
     app = FastAPI(title="SartorIA measurement engine", version="0.2.0")
 
     origins = [o.strip().rstrip("/") for o in os.environ.get(
@@ -94,20 +112,35 @@ def make_app(measure_fn: MeasureFn | Callable[..., dict]) -> FastAPI:
         height_cm: float = Form(...),
         session_id: str = Form(default=""),
     ) -> JSONResponse:
+        """Take the clip, start the work, hand back a ticket."""
         sid = session_id or f"web-{uuid.uuid4().hex[:8]}"
-        began = time.perf_counter()
         try:
             clip, suffix = _read(video)
-            body = measure_fn(clip=clip, height_cm=height_cm,
-                              session_id=sid, suffix=suffix)
-            body["took_seconds"] = round(time.perf_counter() - began, 2)
-            return JSONResponse(body)
+            job_id = submit_fn(clip=clip, height_cm=height_cm,
+                               session_id=sid, suffix=suffix)
+            return JSONResponse({"status": "accepted", "job_id": job_id,
+                                 "session_id": sid}, status_code=202)
         except Exception as e:
             return JSONResponse(_refusal(
                 sid, height_cm,
                 "Something went wrong reading that clip. Try recording again — "
                 "ten seconds, whole body in frame.",
                 f"{type(e).__name__}: {e}"), status_code=200)
+
+    @app.get("/result/{job_id}")
+    def result(job_id: str) -> JSONResponse:
+        """The twin once it exists. Until then, say so and say nothing else."""
+        try:
+            body = poll_fn(job_id=job_id)
+        except Exception as e:
+            return JSONResponse(_refusal(
+                "", 0.0,
+                "The measurement failed partway through. Record again — ten "
+                "seconds, whole body in frame.",
+                f"{type(e).__name__}: {e}"), status_code=200)
+        if body is None:
+            return JSONResponse({"status": "working"}, status_code=200)
+        return JSONResponse(body)
 
     @app.post("/debug")
     async def debug_view(
@@ -122,9 +155,11 @@ def make_app(measure_fn: MeasureFn | Callable[..., dict]) -> FastAPI:
         """
         try:
             clip, suffix = _read(video)
-            body = measure_fn(clip=clip, height_cm=height_cm,
-                              session_id="debug", suffix=suffix)
-            return JSONResponse(body)
+            return JSONResponse({
+                "status": "accepted",
+                "job_id": submit_fn(clip=clip, height_cm=height_cm,
+                                    session_id="debug", suffix=suffix)},
+                status_code=202)
         except Exception as e:
             return JSONResponse({"error": f"{type(e).__name__}: {e}"}, status_code=500)
 

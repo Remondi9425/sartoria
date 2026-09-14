@@ -52,7 +52,7 @@ export default function App() {
 
   // Handed the recorded clip when the ten seconds are up. Only now does any
   // measuring start — before this there was nothing to measure.
-  const analyse = useCallback(async (clip: Blob | null) => {
+  const analyse = useCallback(async (clip: Blob | null, heightCm = height) => {
     setStep("analysing");
     setProgress({ fraction: 0, hint: "Sending your clip" });
 
@@ -65,7 +65,7 @@ export default function App() {
       const engine = getEngine(scenarioFromUrl());
       setEngineIsStub(engine.isStub);
       const result = await engine.analyse({
-        heightCm: height,
+        heightCm,
         video: clip ?? undefined,
         onProgress: setProgress,
         signal: ctrl.signal,
@@ -111,7 +111,10 @@ export default function App() {
 
   return (
     <Frame>
-      {step === "welcome" && <Welcome onStart={start} />}
+      {step === "welcome" && (
+        <Welcome onStart={start}
+                 onUseFile={(h, clip) => { setHeight(h); analyse(clip, h); }} />
+      )}
 
       {(step === "filming" || step === "analysing") && (
         <Filming phase={step === "filming" ? "recording" : "analysing"}

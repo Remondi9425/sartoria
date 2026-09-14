@@ -143,11 +143,23 @@ def measure(clip: bytes, height_cm: float, session_id: str, suffix: str = ".mp4"
     image=base,
     cpu=1.0,
     memory=2048,
-    timeout=700,
+    timeout=120,
     scaledown_window=300,
 )
 @modal.asgi_app()
 def engine():
-    """The HTTP front. Cheap, always warm-ish, and it calls the GPU function."""
+    """The HTTP front. Cheap, and it never waits for the GPU."""
     from spike.serve import make_app
-    return make_app(measure_fn=measure.remote)
+
+    def submit(clip: bytes, height_cm: float, session_id: str, suffix: str) -> str:
+        return measure.spawn(clip=clip, height_cm=height_cm,
+                             session_id=session_id, suffix=suffix).object_id
+
+    def poll(job_id: str):
+        call = modal.FunctionCall.from_id(job_id)
+        try:
+            return call.get(timeout=0)
+        except TimeoutError:
+            return None
+
+    return make_app(submit_fn=submit, poll_fn=poll)
