@@ -75,6 +75,13 @@ function quality(v: unknown): CaptureQuality {
 /** Throws ContractError rather than returning something half-built. */
 export function parseTwin(body: unknown): DigitalTwin {
   const b = obj(body, "response");
+
+  // Checked first and on its own. Validating the measurements and inferring
+  // success from their presence is not the same thing: a complete body
+  // carrying status "error" would have been read as a measurement.
+  if (b.status !== "ok") {
+    throw new ContractError(`status is ${JSON.stringify(b.status)}, not "ok"`);
+  }
   const m = obj(b.measurements_cm, "measurements_cm");
   const c = obj(b.measurement_confidence, "measurement_confidence");
 

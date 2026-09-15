@@ -22,13 +22,28 @@ from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from .auth import RateLimit, TokenError, verify
+from .auth import RateLimit, TokenError, caller_id, verify
 from . import twin as T
 
 MAX_BYTES = 80 * 1024 * 1024
 MIN_BYTES = 10_000                       # smaller than any real ten-second clip
 MIN_HEIGHT_CM, MAX_HEIGHT_CM = 140.0, 210.0
-ALLOWED_SUFFIXES = {".mp4", ".mov", ".webm", ".m4v", ".avi", ".mkv"}
+# Recognised by what the bytes say, not by what the upload was called. An
+# unknown extension used to be quietly renamed .mp4 and sent to a GPU anyway,
+# which made "anything under 80 MB" the real admission policy.
+CONTAINERS: list[tuple[str, Callable[[bytes], bool]]] = [
+    (".mp4", lambda b: len(b) > 12 and b[4:8] == b"ftyp"),
+    (".webm", lambda b: b[:4] == b"\x1a\x45\xdf\xa3"),        # EBML: WebM or MKV
+    (".avi", lambda b: b[:4] == b"RIFF" and b[8:12] == b"AVI "),
+]
+
+
+def sniff_container(data: bytes) -> str | None:
+    """The suffix the bytes deserve, or None if they are not a video at all."""
+    for suffix, looks_like in CONTAINERS:
+        if looks_like(data):
+            return suffix
+    return None
 
 log = logging.getLogger("sartoria.engine")
 
@@ -152,13 +167,14 @@ def make_app(submit_fn: SubmitFn | Callable[..., str],
         if len(data) < MIN_BYTES:
             raise Rejected("That file is too small to be a video. Record for "
                            "about ten seconds.")
-        # The filename comes from the client, and it ends up as a temp-file
-        # suffix on the worker. Take the extension only if we recognise it, and
-        # never anything with a path separator in it.
-        name = (upload.filename or "").lower()
-        suffix = "." + name.rsplit(".", 1)[-1] if "." in name else ""
-        if suffix not in ALLOWED_SUFFIXES:
-            suffix = ".mp4"
+        # The filename is the client's to choose and ends up as a temp-file
+        # suffix on the worker, so it is not consulted at all. Starting a GPU
+        # container on arbitrary bytes is expensive; reading the first twelve
+        # of them is not.
+        suffix = sniff_container(data)
+        if suffix is None:
+            raise Rejected("That file does not look like a video we can read. "
+                           "Record with your phone's own camera app.")
         return data, suffix
 
     def _height(value: float) -> float:

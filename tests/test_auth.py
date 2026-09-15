@@ -3,7 +3,7 @@ import time
 
 import pytest
 
-from spike.auth import RateLimit, TokenError, mint, verify
+from spike.auth import RateLimit, TokenError, caller_id, mint, verify
 
 SECRET = "a-secret-that-never-reaches-the-bundle"
 
@@ -63,3 +63,30 @@ def test_polling_is_not_budgeted_like_starting_a_job():
     polls = RateLimit(limit=1200, window_seconds=600)
     assert all(polls.allow("1.2.3.4") for _ in range(60))
     assert starts.allow("1.2.3.4") is True
+
+
+def test_a_token_is_no_use_from_another_address():
+    """It cannot say who a person is — the app hands one to anybody who asks —
+    but it can say the holder is not who it was issued to."""
+    mine = caller_id("203.0.113.7")
+    theirs = caller_id("198.51.100.9")
+    token = mint(SECRET, who=mine)
+    assert verify(token, SECRET, who=mine)["w"] == mine
+    with pytest.raises(TokenError):
+        verify(token, SECRET, who=theirs)
+
+
+def test_an_unbound_token_still_works_anywhere():
+    """Binding narrows a token; it is not a second secret, and an old token
+    without a handle must not start failing."""
+    assert verify(mint(SECRET), SECRET, who=caller_id("203.0.113.7"))
+
+
+def test_the_address_itself_is_never_written_into_the_token():
+    """The token travels through a browser. An IP is personal data that does
+    not need to go with it."""
+    token = mint(SECRET, who=caller_id("203.0.113.7"))
+    assert "203.0.113.7" not in token
+    import base64
+    body = base64.urlsafe_b64decode(token.split(".")[0] + "==").decode()
+    assert "203.0.113" not in body

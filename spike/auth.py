@@ -7,8 +7,15 @@ restriction on anyone holding a shell.
 
 So the front end's server mints a token, the browser carries it, and the worker
 checks it. The secret stays on the server at both ends and never reaches the
-bundle. This is a speed bump with an expiry date, not an identity system: it
-stops the URL being a free GPU for whoever finds it.
+bundle.
+
+**What this does and does not do.** It stops someone who finds the engine's URL
+from using it, and it ties a token to the address that asked for one, so a
+token lifted from a browser is no use elsewhere. It does *not* authorise a
+person: the front end hands a token to any caller that asks, so anyone who
+finds the app can still get one. Real protection needs a bot check or a signed-
+in session, and rate limiting that outlives a container. This is a bounded
+deterrent, and calling it more than that would be worse than not having it.
 """
 from __future__ import annotations
 
@@ -31,14 +38,27 @@ def _unb64(s: str) -> bytes:
     return base64.urlsafe_b64decode(s + "=" * (-len(s) % 4))
 
 
-def mint(secret: str, ttl_seconds: int = 900, purpose: str = "measure") -> str:
+def caller_id(raw: str | None) -> str:
+    """A stable, non-reversible handle for whoever is asking.
+
+    The address itself is never written into a token: the token travels through
+    a browser, and an IP is personal data that does not need to.
+    """
+    return hashlib.sha256((raw or "unknown").encode()).hexdigest()[:16]
+
+
+def mint(secret: str, ttl_seconds: int = 900, purpose: str = "measure",
+         who: str | None = None) -> str:
     payload = {"exp": int(time.time()) + ttl_seconds, "p": purpose}
+    if who:
+        payload["w"] = who
     body = _b64(json.dumps(payload, separators=(",", ":")).encode())
     sig = hmac.new(secret.encode(), body.encode(), hashlib.sha256).digest()
     return f"{body}.{_b64(sig)}"
 
 
-def verify(token: str, secret: str, purpose: str = "measure") -> dict:
+def verify(token: str, secret: str, purpose: str = "measure",
+           who: str | None = None) -> dict:
     """The payload, or TokenError. Never returns a partially trusted result."""
     try:
         body, sig = token.split(".", 1)
@@ -68,6 +88,11 @@ def verify(token: str, secret: str, purpose: str = "measure") -> dict:
         raise TokenError("no expiry")
     if payload["exp"] < time.time():
         raise TokenError("expired")
+    # A token minted for one caller is no use to another. Only enforced when
+    # the token carries a handle, so an unbound token stays valid — it is a
+    # narrowing, not a second secret.
+    if payload.get("w") and who and payload["w"] != who:
+        raise TokenError("token was issued to a different caller")
     return payload
 
 

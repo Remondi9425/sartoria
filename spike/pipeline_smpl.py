@@ -20,7 +20,7 @@ import numpy as np
 from . import capture, config as C, mesh as M, nlf, twin as T
 
 CROWN_TOLERANCE = C.CROWN_TOLERANCE
-MIN_MEASURED_FRAMES = 4
+MIN_MEASURED_FRAMES = C.MIN_USABLE_FRAMES
 
 
 @dataclass
@@ -59,6 +59,12 @@ def judge_turn(yaws: list[float]) -> Turn:
                     f"We never saw you {missing}. Turn all the way round "
                     f"slowly — without a side view we would be guessing how "
                     f"deep you are, not measuring it.", None)
+
+    if coverage < C.ROTATION_COVERAGE_FLOOR:
+        return Turn(coverage, frontal, profile,
+                    "We saw you from the front and from the side, but nothing "
+                    "in between — that is two poses, not a turn. Rotate slowly "
+                    "on the spot for about ten seconds.", None)
 
     coaching = (None if coverage >= C.ROTATION_COVERAGE_MIN else
                 "Turn more slowly next time — we caught the front and the "

@@ -72,6 +72,19 @@ test("an unknown quality tier is refused", () => {
   assert.throws(() => parseTwin(b), ContractError);
 });
 
+test("a complete body that is not a success is still refused", () => {
+  // The earlier version of this test passed for the wrong reason: the body it
+  // fed in had no measurements, so it would have been rejected whatever its
+  // status said.
+  const b = goodBody();
+  b.status = "error";
+  assert.throws(() => parseTwin(b), ContractError);
+  delete b.status;
+  const missing = goodBody();
+  delete missing.status;
+  assert.throws(() => parseTwin(missing), ContractError);
+});
+
 test("an error body does not become a twin", () => {
   assert.throws(() => parseTwin({ status: "error", detail: "boom" }), ContractError);
   assert.throws(() => parseTwin(null), ContractError);

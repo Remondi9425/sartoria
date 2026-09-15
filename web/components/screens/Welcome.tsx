@@ -71,7 +71,10 @@ export function Welcome({
                  }} />
         </div>
         <div className="pt-3 text-center">
-          <Note>The video is never saved. Only your measurements are.</Note>
+          <Note>
+            The video is never uploaded anywhere but the measuring service,
+            and nothing is kept: close this and it is all gone.
+          </Note>
         </div>
       </Footer>
     </Screen>

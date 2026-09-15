@@ -6,7 +6,9 @@ numbers are wrong, and by how much, is what the first real recordings are for.
 import os
 
 # ── capture gates ───────────────────────────────────────────────────────────
-# Below this there is nothing to reconcile across frames.
+# Below this there is nothing to reconcile across frames, and agreement
+# between three or four of them is not evidence of anything. Applied both to
+# the bodies found and to the frames that survive measuring.
 MIN_USABLE_FRAMES = 12
 # How many frames may lose the crown past the frame edge before the scale is
 # unsupported. NLF completes a body that runs out of shot, so a vertex landing
@@ -21,7 +23,11 @@ TARGET_FRAMES = 90
 # confidence in a number nobody measured. A side view is what makes depth real.
 FRONTAL_YAW_TOL_DEG = 25.0      # |yaw| under this counts as facing the camera
 PROFILE_YAW_MIN_DEG = 55.0      # |yaw| over this counts as side-on
-ROTATION_COVERAGE_MIN = 0.45    # fraction of the half-turn we want to have seen
+# Six 15-degree buckets from face-on to side-on. A smooth turn fills all of
+# them; a coarse one about five; a front and a side with nothing between fills
+# two, and that is two poses rather than a body rotating.
+ROTATION_COVERAGE_MIN = 0.75    # below this, advise turning more slowly
+ROTATION_COVERAGE_FLOOR = 0.5   # below this, it was not a turn
 
 # ── plausibility envelope ───────────────────────────────────────────────────
 # cm, generous adult ranges — outside these we refuse rather than guess.

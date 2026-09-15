@@ -32,8 +32,15 @@ def test_filmed_only_from_the_side_is_blocked_too():
     assert t.blocking is not None and "face on" in t.blocking
 
 
-def test_front_and_side_but_nothing_between_gets_advice_not_a_block():
-    t = judge_turn([0.0, 1.0, 2.0, 89.0, 90.0, 88.0])
+def test_two_poses_and_a_cut_is_not_a_turn():
+    """A front and a side satisfy "we saw both" without the body ever having
+    rotated — the case the review pointed at."""
+    t = judge_turn([0.0, 1.0, 2.0, 89.0, 90.0, 88.0] * 3)
+    assert t.blocking is not None and "not a turn" in t.blocking
+
+
+def test_a_turn_with_gaps_gets_advice_not_a_block():
+    t = judge_turn([0.0, 20.0, 40.0, 88.0] * 3)
     assert t.blocking is None
     assert t.coaching is not None and "more slowly" in t.coaching
 
@@ -50,9 +57,17 @@ def test_yaw_is_folded_so_facing_away_counts_as_frontal():
 
 
 @pytest.mark.parametrize("yaws,covered", [
-    ([0.0] * 30, 0.08),
-    (turning(30), 0.5),
+    ([0.0] * 30, 0.17),          # one bucket: never moved
+    (turning(30), 0.67),          # 0, 30, 60 and 90 — four of six
     (turning(8), 1.0),
 ])
 def test_coverage_counts_how_much_of_the_half_turn_was_seen(yaws, covered):
     assert judge_turn(yaws).coverage == pytest.approx(covered, abs=0.1)
+
+
+def test_the_same_pose_from_either_side_is_not_two_poses():
+    """+90 and −90 are one orientation seen by one camera. Counting them
+    separately made a front and a side look like a third of a turn."""
+    from spike.mesh import rotation_coverage
+    assert rotation_coverage([90.0] * 8) == rotation_coverage([-90.0] * 8)
+    assert rotation_coverage([90.0, -90.0] * 8) == rotation_coverage([90.0] * 8)

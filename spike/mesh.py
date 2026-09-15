@@ -326,14 +326,20 @@ def yaw_deg(hip_l: np.ndarray, hip_r: np.ndarray) -> float:
     return float(np.degrees(np.arctan2(d[2], d[0])))
 
 
-def rotation_coverage(yaws: list[float]) -> float:
-    """How much of a half-turn the clip shows, 0..1.
+COVERAGE_BUCKETS = 6            # 15 degrees each, over a quarter turn
 
-    Twelve 15-degree buckets across ±90; the fraction holding at least one
-    frame. A clip that never turns scores near zero however long it runs.
+
+def rotation_coverage(yaws: list[float]) -> float:
+    """How much of the sweep from face-on to side-on the clip shows, 0..1.
+
+    Bucketed on how side-on the body is, not on which way it turned: +90 and
+    −90 are the same pose seen from the same camera, and bucketing on the
+    signed angle counted them as two — so a front and a side, with nothing
+    between, scored as though the body had swept through a third of the turn.
     """
     if not yaws:
         return 0.0
-    seen = {min(11, max(0, int((y + 90.0) / 15.0)))
-            for y in (((v + 90.0) % 180.0) - 90.0 for v in yaws)}
-    return len(seen) / 12.0
+    folded = (abs(((v + 90.0) % 180.0) - 90.0) for v in yaws)
+    seen = {min(COVERAGE_BUCKETS - 1, max(0, int(y / (90.0 / COVERAGE_BUCKETS))))
+            for y in folded}
+    return len(seen) / COVERAGE_BUCKETS
