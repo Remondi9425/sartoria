@@ -85,6 +85,7 @@ class SmplOutcome:
     per_frame: list[dict[str, float]] = field(default_factory=list)
     spreads: dict[str, float] = field(default_factory=dict)
     probe: dict | None = None
+    leg_cloud: list[list[float]] | None = None
     frame_detail: list[dict] = field(default_factory=list)
 
 
@@ -174,6 +175,18 @@ def run(video: str | Path, height_cm: float, session_id: str, model,
 
     values, conf, spreads = nlf.reconcile(per_frame)
     out.spreads = spreads
+
+    # The body to show is the one whose own numbers landed closest to the
+    # reconciled ones — the frame least unlike all the others, rather than
+    # whichever happened to be in the middle of the clip.
+    def distance(m: dict[str, float]) -> float:
+        return sum(abs(m[s] - values[s]) for s in ("waist", "hip", "inseam")
+                   if s in m and s in values)
+
+    best = min(range(len(per_frame)), key=lambda i: distance(per_frame[i]))
+    representative = [fm for fm, m in paired if m][best]
+    out.leg_cloud = nlf.leg_cloud(representative,
+                                  per_frame[best].get("_y_waist", 0.0))
     missing = [s for s in C.ALL_MEASUREMENTS if s not in values]
     if missing:
         verdict.blocking.append(
@@ -183,6 +196,6 @@ def run(video: str | Path, height_cm: float, session_id: str, model,
         return out
 
     ms = {s: T.Measurement(values[s], conf[s]) for s in C.ALL_MEASUREMENTS}
-    out.twin = T.build(session_id, height_cm, ms, quality)
+    out.twin = T.build(session_id, height_cm, ms, quality, out.leg_cloud)
     out.twin.processing_method = "nlf_smpl_hull_v1"
     return out

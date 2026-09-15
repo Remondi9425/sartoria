@@ -80,8 +80,20 @@ def measured():
 
 
 def test_every_measurement_comes_back(measured):
-    assert set(measured) == {"waist", "hip", "thigh", "knee", "calf",
-                             "ankle", "inseam", "outseam", "rise"}
+    # Keys starting with an underscore are working values passed back to the
+    # caller — where the waist landed, so the leg cloud can be cropped at the
+    # same level — and are not measurements.
+    public = {k for k in measured if not k.startswith("_")}
+    assert public == {"waist", "hip", "thigh", "knee", "calf",
+                      "ankle", "inseam", "outseam", "rise"}
+
+
+def test_working_values_never_reach_the_reconciled_numbers(measured):
+    from spike.config import ALL_MEASUREMENTS
+    from spike.nlf import reconcile
+    values, conf, _ = reconcile([measured])
+    assert set(values) <= set(ALL_MEASUREMENTS)
+    assert not any(k.startswith("_") for k in values)
 
 
 @pytest.mark.parametrize("site,tol_pct", [

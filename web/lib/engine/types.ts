@@ -41,6 +41,11 @@ export interface DigitalTwin {
   processing_method: string;
   data_quality_tier: QualityTier;
   created_at: string;
+  /** The customer's legs as surface points in centimetres — standing on zero,
+   *  centred on the hips. Absent from the stub and from older workers. Legs
+   *  only: the model returns a whole body, and a head is not part of picking
+   *  trousers. */
+  leg_cloud_cm?: [number, number, number][] | null;
 }
 
 /** What comes back when a gate blocks. A cause, never a generic failure. */

@@ -46,6 +46,10 @@ class DigitalTwin:
     capture_quality: CaptureQuality
     processing_method: str = METHOD
     data_quality_tier: str = "C"
+    # The customer's legs as surface points, in centimetres, standing on zero
+    # and centred on the hips. Legs only: the mesh the model returns includes a
+    # head, and what is not transmitted cannot be mishandled.
+    leg_cloud_cm: list[list[float]] | None = None
     created_at: str = field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat(timespec="seconds"))
 
@@ -70,7 +74,8 @@ def tier(conf: dict[str, str]) -> str:
 
 
 def build(session_id: str, height_cm: float, ms: dict[str, Measurement],
-          quality: CaptureQuality) -> DigitalTwin:
+          quality: CaptureQuality,
+          leg_cloud: list[list[float]] | None = None) -> DigitalTwin:
     conf = {k: v.quality for k, v in ms.items()}
     return DigitalTwin(
         session_id=session_id,
@@ -80,6 +85,7 @@ def build(session_id: str, height_cm: float, ms: dict[str, Measurement],
         measurement_notes={k: v.note for k, v in ms.items() if v.note},
         capture_quality=quality,
         data_quality_tier=tier(conf),
+        leg_cloud_cm=leg_cloud,
     )
 
 

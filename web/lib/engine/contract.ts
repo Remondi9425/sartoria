@@ -72,6 +72,36 @@ function quality(v: unknown): CaptureQuality {
   };
 }
 
+/** A body is roughly this big. Anything outside it is not a leg, and drawing
+ *  it would produce a picture nobody can interpret. */
+const CLOUD_BOUNDS = { x: 80, y: 140, z: 80 };
+const MAX_CLOUD_POINTS = 20_000;
+
+function legCloud(v: unknown): [number, number, number][] | null {
+  if (v === undefined || v === null) return null;
+  if (!Array.isArray(v)) throw new ContractError("leg_cloud_cm is not a list");
+  if (v.length > MAX_CLOUD_POINTS) {
+    throw new ContractError(`leg_cloud_cm has ${v.length} points`);
+  }
+  const out: [number, number, number][] = [];
+  for (const p of v) {
+    if (!Array.isArray(p) || p.length !== 3) {
+      throw new ContractError("a leg_cloud_cm point is not [x, y, z]");
+    }
+    const [x, y, z] = p;
+    if (![x, y, z].every((n) => typeof n === "number" && Number.isFinite(n))) {
+      throw new ContractError("a leg_cloud_cm coordinate is not a number");
+    }
+    if (Math.abs(x) > CLOUD_BOUNDS.x || Math.abs(z) > CLOUD_BOUNDS.z
+        || y < -1 || y > CLOUD_BOUNDS.y) {
+      throw new ContractError(`a leg_cloud_cm point is off the body: ${p}`);
+    }
+    out.push([x, y, z]);
+  }
+  return out.length ? out : null;
+}
+
+
 /** Throws ContractError rather than returning something half-built. */
 export function parseTwin(body: unknown): DigitalTwin {
   const b = obj(body, "response");
@@ -115,6 +145,7 @@ export function parseTwin(body: unknown): DigitalTwin {
   }
 
   return {
+    leg_cloud_cm: legCloud(b.leg_cloud_cm),
     session_id: String(b.session_id ?? ""),
     height_cm: b.height_cm,
     measurements_cm: measurements,

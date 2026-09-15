@@ -37,6 +37,18 @@ function callerId(address: string | null, secret: string): string {
     .digest("hex").slice(0, 16);
 }
 
+/** Whether an address is one a remote worker could also observe. */
+function routable(address: string | null): boolean {
+  if (!address) return false;
+  const a = address.toLowerCase();
+  if (a === "::1" || a.startsWith("127.") || a.startsWith("fe80:")) return false;
+  if (a.startsWith("10.") || a.startsWith("192.168.")) return false;
+  if (/^172\.(1[6-9]|2\d|3[01])\./.test(a)) return false;
+  if (a.startsWith("::ffff:")) return routable(a.slice(7));
+  return true;
+}
+
+
 function tooMany(who: string): boolean {
   const now = Date.now();
   const hits = (issued.get(who) ?? []).filter((t) => now - t < ISSUE_WINDOW_MS);
@@ -59,16 +71,25 @@ export async function POST(request: NextRequest) {
   }
 
   const address = request.headers.get("x-forwarded-for")?.split(",")[0].trim()
-                  ?? null;
-  const who = callerId(address, secret);
-  if (tooMany(who)) {
+                  || null;
+  // Bound only to an address the worker could also see.
+  //
+  // Binding works because both ends observe the same client from the public
+  // internet. Running locally they do not: this server sees a loopback
+  // address while the worker sees the browser's real one, and a token narrowed
+  // to 127.0.0.1 is a token the worker must refuse. A private address is
+  // positive evidence that we are not on the path the worker sees, so the
+  // token is left unbound — a narrowing not taken, rather than a check that
+  // quietly fails.
+  const who = routable(address) ? callerId(address!, secret) : null;
+  if (tooMany(who ?? "local")) {
     return NextResponse.json({ error: "too many requests" }, { status: 429 });
   }
 
   const payload = JSON.stringify({
     exp: Math.floor(Date.now() / 1000) + TTL_SECONDS,
     p: "measure",
-    w: who,
+    ...(who ? { w: who } : {}),
   });
   const body = b64url(payload);
   const sig = createHmac("sha256", secret).update(body).digest();

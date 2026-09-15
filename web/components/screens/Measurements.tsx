@@ -1,6 +1,7 @@
 "use client";
 
 import { LegDiagram } from "@/components/art/LegDiagram";
+import { LegScan } from "@/components/art/LegScan";
 import { Body, Button, Eyebrow, Footer, Note, Screen, StubBadge, Title } from "@/components/ui";
 import type { DigitalTwin } from "@/lib/engine/types";
 
@@ -56,9 +57,36 @@ export function Measurements({
           </div>
         )}
 
-        <div className="pt-6">
-          <LegDiagram twin={twin} />
-        </div>
+        {/* The scan when there is one, the drawing when there is not. The
+            drawing is a generic body with the numbers attached to it; the scan
+            is the person's own legs, which is what the measurements were
+            actually taken from. */}
+        {twin.leg_cloud_cm?.length ? (
+          <div className="pt-5">
+            <div className="rounded-2xl bg-paper py-4">
+              <LegScan points={twin.leg_cloud_cm} className="h-[300px] w-full" />
+            </div>
+            <p className="pt-2 text-center text-[11px] text-faint">
+              Your legs, as measured · drag to turn
+            </p>
+            <div className="grid grid-cols-4 gap-2 pt-4">
+              {(["waist", "hip", "thigh", "inseam"] as const).map((site) => (
+                <div key={site} className="rounded-lg bg-paper px-2 py-2.5 text-center">
+                  <p className="figure text-[15px] font-semibold leading-none">
+                    {twin.measurements_cm[site]}
+                  </p>
+                  <p className="pt-1 text-[8.5px] uppercase tracking-[.12em] text-faint">
+                    {site}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="pt-6">
+            <LegDiagram twin={twin} />
+          </div>
+        )}
 
         <div className="rounded-xl bg-paper px-4 py-3">
           <p className="text-[12px] leading-[1.5] text-mute">

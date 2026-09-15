@@ -277,7 +277,45 @@ def measure_one(fm: FrameMesh) -> dict[str, float] | None:
         "waist": waist, "hip": seat, "thigh": thigh, "knee": knee,
         "calf": calf, "ankle": ankle,
         "inseam": inseam, "outseam": outseam, "rise": outseam - inseam,
+        # Not a measurement: where the waist landed, so the leg cloud can be
+        # cropped at the same place the outseam was taken from.
+        "_y_waist": y_waist,
     }
+
+
+# How many surface points to send back. A leg reads as a solid form well
+# before this; past it the payload grows and the picture does not.
+CLOUD_POINTS = 2600
+
+
+def leg_cloud(fm: FrameMesh, y_waist: float) -> list[list[float]] | None:
+    """The customer's legs as a cloud of surface points, in centimetres.
+
+    Only the legs. The mesh NLF returns is a whole body including a head, and
+    the product is about how trousers fit — so the part above the waist is
+    dropped rather than sent to a browser and cropped there. What is not
+    transmitted cannot be mishandled, and this is a scan of a person.
+
+    No faces: the triangles that would turn these points into a surface belong
+    to the SMPL model files, which carry a licence we deliberately avoided
+    needing. A dense enough point cloud reads as a limb anyway.
+    """
+    j = fm.joints
+    pts = _without_arms(fm.points, j)          # hands hang to mid-thigh
+    keep = pts[pts[:, 1] <= y_waist + 2.0]
+    if len(keep) < 200:
+        return None
+
+    if len(keep) > CLOUD_POINTS:               # deterministic, not sampled
+        keep = keep[:: max(1, len(keep) // CLOUD_POINTS)][:CLOUD_POINTS]
+
+    # Centred on the hips and standing on zero, so the browser receives
+    # something it can draw without knowing anything about our frame.
+    centre = np.array([
+        float(np.median(keep[:, 0])), float(keep[:, 1].min()),
+        float(np.median(keep[:, 2])),
+    ])
+    return [[round(float(v), 1) for v in p] for p in (keep - centre)]
 
 
 def reconcile(per_frame: list[dict[str, float]]
