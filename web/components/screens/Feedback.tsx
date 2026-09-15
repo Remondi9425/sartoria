@@ -52,8 +52,10 @@ export function Feedback({
         {picked && (
           <div className="mt-6 rounded-xl bg-paper px-4 py-3.5">
             <p className="text-[12px] leading-[1.5] text-mute">
-              Recorded against {product.brand}&rsquo;s chart. One answer changes
-              nothing on its own; a thousand of them move the calibration.
+              This is where the answer would go against {product.brand}&rsquo;s
+              chart. Nothing is saved yet — the loop that learns from it is not
+              built. One answer would change nothing on its own; a thousand
+              would move the calibration.
             </p>
           </div>
         )}

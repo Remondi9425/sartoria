@@ -6,8 +6,9 @@
  * two files are the same contract in two languages, which is why neither has a
  * translation layer.
  */
+import { parseTwin } from "./contract";
 import type {
-  AnalyseInput, CaptureQuality, CaptureResult, DigitalTwin, MeasurementEngine,
+  AnalyseInput, CaptureQuality, CaptureResult, MeasurementEngine,
 } from "./types";
 
 /** What the worker is doing while it works. It cannot tell us, so this is an
@@ -60,6 +61,18 @@ function rejected(reason: string, quality = UNKNOWN_QUALITY): CaptureResult {
   };
 }
 
+/** A token from our own server, which is the only side that holds the secret. */
+async function engineToken(signal?: AbortSignal): Promise<string | null> {
+  try {
+    const res = await fetch("/api/engine-token", { method: "POST", signal });
+    if (!res.ok) return null;
+    return (await res.json()).token ?? null;
+  } catch {
+    return null;
+  }
+}
+
+
 export function createHttpEngine(baseUrl: string): MeasurementEngine {
   return {
     name: `http:${baseUrl}`,
@@ -89,9 +102,21 @@ export function createHttpEngine(baseUrl: string): MeasurementEngine {
         form.append("height_cm", String(heightCm));
 
         tick(0.05);
+        const token = await engineToken(signal);
+        const auth: HeadersInit = token ? { authorization: `Bearer ${token}` } : {};
+
         const submit = await fetch(`${baseUrl}/analyse`, {
-          method: "POST", body: form, signal,
+          method: "POST", body: form, headers: auth, signal,
         });
+        if (submit.status === 401) {
+          return rejected(
+            "The app is not authorised to reach the measurement engine. Its " +
+            "shared secret is missing or out of date.");
+        }
+        if (submit.status === 429) {
+          return rejected(
+            "That is a lot of scans in a short time. Give it a few minutes.");
+        }
         if (!submit.ok && submit.status !== 202) {
           return rejected(
             `The measurement engine answered ${submit.status}. Check the Modal ` +
@@ -109,16 +134,25 @@ export function createHttpEngine(baseUrl: string): MeasurementEngine {
         for (let i = 0; i < MAX_POLLS; i++) {
           await sleep(POLL_MS, signal);
           tick(Math.min(0.94, 0.05 + (Date.now() - began) / 150_000));
-          const res = await fetch(`${baseUrl}/result/${ticket.job_id}`, { signal });
+          const res = await fetch(`${baseUrl}/result/${ticket.job_id}`,
+                                  { headers: auth, signal });
           if (!res.ok) continue;
           const body = await res.json();
           if (body.status === "working") continue;
 
           onProgress?.({ fraction: 1, hint: "Done" });
           if (body.status === "capture_rejected") return asRejection(body);
-          delete body.status;
-          delete body.took_seconds;
-          return { status: "ok", twin: body as DigitalTwin, coaching: [] };
+          try {
+            return { status: "ok", twin: parseTwin(body), coaching: [] };
+          } catch (bad) {
+            // A response we cannot read is not a measurement. Better to refuse
+            // than to hand a half-built twin to the size calculator.
+            console.error("engine response failed the contract:", bad);
+            return rejected(
+              "The measurement came back in a form we could not read. Please " +
+              "record again — and if it keeps happening, the engine and the " +
+              "app are out of step.");
+          }
         }
         return rejected(
           "The measurement is taking longer than it should. Try again in a moment.");

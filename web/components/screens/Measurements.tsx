@@ -48,7 +48,8 @@ export function Measurements({
 
         <div className="pt-4 pb-2">
           <Note>
-            Saved to your profile. Yours to see, export or delete at any time.
+            Nothing is stored yet — close this and the numbers are gone. When a
+            profile exists it will be yours to see, export and delete.
           </Note>
         </div>
       </Body>

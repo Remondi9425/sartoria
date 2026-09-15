@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { Body, Button, Footer, Note, Screen, StubBadge } from "@/components/ui";
+import { engineConfigured } from "@/lib/engine";
 
 export function Welcome({
   onStart, onUseFile,
@@ -20,7 +21,7 @@ export function Welcome({
           <p className="text-[15px] font-bold tracking-[.22em] text-ink">
             SARTOR<span className="text-rust">IA</span>
           </p>
-          <StubBadge />
+          {!engineConfigured && <StubBadge />}
         </div>
 
         <h1 className="pt-16 text-[33px] leading-[1.12] font-bold tracking-[-.02em]">

@@ -38,6 +38,11 @@ BAND_CM = 1.2
 # is about 5 cm thick; the margin covers a sleeve and the pose model's slack
 # without reaching the ribcage at the heights we measure.
 ARM_RADIUS_CM = 8.0
+# How far the subject may move between sampled frames, and how much their
+# apparent size may change, before the frame is treated as somebody else.
+# Both are fractions of the body's own height, so they hold at any distance.
+SUBJECT_JUMP = 0.35
+SUBJECT_RESIZE = 0.15
 # The chain ends mid-palm, but SMPL packs roughly eight hundred vertices into
 # each hand and the fingers reach well past that joint. Left behind, they sit
 # at hip height — which is why the seat and thigh were the only measurements
@@ -70,6 +75,7 @@ class FrameMesh:
     rot_bbox: list                 # extents after standing the body upright
     raw_p98: list                  # the same extents ignoring the outer 1%
     height_cm: float = 0.0         # the stature the mesh was scaled to
+    yaw: float = 0.0               # 0 square to the camera, ±90 side-on
 
 
 def load_model(path: str | Path):
@@ -95,6 +101,8 @@ def meshes_from_frames(model, images: list[np.ndarray], height_cm: float,
 
     out: list[FrameMesh] = []
     detections: list[list[float]] = []
+    tracked: tuple[np.ndarray, float] | None = None
+    skipped = 0
     for img in images[::stride]:
         t = torch.from_numpy(np.ascontiguousarray(img[:, :, ::-1])).permute(2, 0, 1)
         if torch.cuda.is_available():
@@ -106,13 +114,31 @@ def meshes_from_frames(model, images: list[np.ndarray], height_cm: float,
         if verts is None or len(verts) == 0 or len(verts[0]) == 0:
             continue                                    # nobody in this frame
 
-        # The model is multi-person and this room has posters of people on the
-        # walls. Take the tallest detection: the one standing in front of the
-        # camera is the one whose body spans the frame.
+        # The model is multi-person: a room can hold a second person, and a
+        # poster of one. Choosing the tallest in every frame independently
+        # means the subject can change halfway through a clip and the
+        # measurements average two bodies.
+        #
+        # So the tallest is chosen once, and after that the detection nearest
+        # to where the subject was a moment ago. A frame whose best candidate
+        # has jumped, or changed size, is dropped rather than guessed at.
         people = verts[0]
+        centres = [pv.mean(axis=0).float().cpu().numpy() for pv in people]
         heights = [float(pv[:, 1].max() - pv[:, 1].min()) for pv in people]
-        who = int(np.argmax(heights))
         detections.append([round(h, 1) for h in heights])
+
+        if tracked is None:
+            who = int(np.argmax(heights))
+        else:
+            prev_centre, prev_height = tracked
+            moved = [float(np.linalg.norm(c - prev_centre)) for c in centres]
+            who = int(np.argmin(moved))
+            jumped = moved[who] > SUBJECT_JUMP * prev_height
+            resized = abs(heights[who] - prev_height) > SUBJECT_RESIZE * prev_height
+            if jumped or resized:
+                skipped += 1
+                continue
+        tracked = (centres[who], heights[who])
 
         v = people[who].float().cpu().numpy()
         j = pred["joints3d"][0][who].float().cpu().numpy()
@@ -138,14 +164,19 @@ def meshes_from_frames(model, images: list[np.ndarray], height_cm: float,
         pts, k = M.rescale_to_height(up, height_cm)
         # max-minus-min is decided by the two most extreme vertices, so it
         # cannot tell a genuinely deep body from a handful of stray ones.
-        raw_bbox = [float(v[:, i].ptp()) for i in range(3)]
+        raw_bbox = [float(np.ptp(v[:, i])) for i in range(3)]
         raw_p98 = [float(np.percentile(v[:, i], 99) - np.percentile(v[:, i], 1))
                    for i in range(3)]
-        rot_bbox = [float(up[:, i].ptp()) for i in range(3)]
+        # Measured before standing the body upright, so it keeps its relation
+        # to where the camera was.
+        yaw = M.yaw_deg(j[J_HIP_L], j[J_HIP_R])
+        rot_bbox = [float(np.ptp(up[:, i])) for i in range(3)]
         out.append(FrameMesh(pts, jf * k, u, k, outside, raw_bbox, rot_bbox,
-                             raw_p98, height_cm))
+                             raw_p98, height_cm, yaw))
     if detections:
-        print(f"detections per frame (body heights, model units): {detections[:6]}")
+        most = max(len(d) for d in detections)
+        print(f"detections per frame: up to {most}; "
+              f"{skipped} frame(s) dropped for an unstable subject")
     return out
 
 
@@ -312,8 +343,8 @@ def probe(fm: FrameMesh) -> dict:
             "height_frac": round((y - lo) / span, 3),
             "points": int(len(sl)),
             "after_specks": int(len(kept)),
-            "x_cm": round(float(kept[:, 0].ptp()), 1) if len(kept) else None,
-            "z_cm": round(float(kept[:, 1].ptp()), 1) if len(kept) else None,
+            "x_cm": round(float(np.ptp(kept[:, 0])), 1) if len(kept) else None,
+            "z_cm": round(float(np.ptp(kept[:, 1])), 1) if len(kept) else None,
             "girth_cm": round(M.girth_at(stripped, y, BAND_CM), 1)
                         if len(kept) >= 8 else None,
         }
@@ -337,14 +368,14 @@ def probe(fm: FrameMesh) -> dict:
         bands.append({
             "from_frac": round(f, 1),
             "n": int(len(sel)),
-            "x_cm": round(float(sel[:, 0].ptp()), 1) if len(sel) else None,
-            "z_cm": round(float(sel[:, 2].ptp()), 1) if len(sel) else None,
+            "x_cm": round(float(np.ptp(sel[:, 0])), 1) if len(sel) else None,
+            "z_cm": round(float(np.ptp(sel[:, 2])), 1) if len(sel) else None,
         })
 
     def bbox(a):
-        return {"x": round(float(a[:, 0].ptp()), 1),
-                "y": round(float(a[:, 1].ptp()), 1),
-                "z": round(float(a[:, 2].ptp()), 1)}
+        return {"x": round(float(np.ptp(a[:, 0])), 1),
+                "y": round(float(np.ptp(a[:, 1])), 1),
+                "z": round(float(np.ptp(a[:, 2])), 1)}
 
     # The hull the hip measurement actually draws, so its shape can be seen
     # instead of inferred from one number.

@@ -1,0 +1,58 @@
+"""Whether the clip ever showed the side.
+
+The pipeline used to hardcode rotation_coverage to zero and never look at it,
+so a clip filmed entirely from the front passed — and because frontal frames
+agree with one another, the depth the model had merely assumed came back
+labelled high confidence.
+"""
+import pytest
+
+from spike.pipeline_smpl import judge_turn
+
+
+def turning(step=10):
+    return [float(y) for y in range(-90, 91, step)]
+
+
+def test_a_full_turn_passes():
+    t = judge_turn(turning())
+    assert t.blocking is None and t.coaching is None
+    assert t.coverage > 0.9
+
+
+def test_standing_still_facing_the_camera_is_blocked():
+    t = judge_turn([1.0, -2.0, 0.5, 3.0] * 6)
+    assert t.blocking is not None
+    assert "from the side" in t.blocking
+    assert t.coverage < 0.2
+
+
+def test_filmed_only_from_the_side_is_blocked_too():
+    t = judge_turn([88.0, 90.0, -89.0, 87.0] * 5)
+    assert t.blocking is not None and "face on" in t.blocking
+
+
+def test_front_and_side_but_nothing_between_gets_advice_not_a_block():
+    t = judge_turn([0.0, 1.0, 2.0, 89.0, 90.0, 88.0])
+    assert t.blocking is None
+    assert t.coaching is not None and "more slowly" in t.coaching
+
+
+def test_no_frames_is_blocked():
+    assert judge_turn([]).blocking is not None
+
+
+def test_yaw_is_folded_so_facing_away_counts_as_frontal():
+    """Turning through 180 shows the back, which is as good as the front for
+    width — what matters is that the camera saw the body square on."""
+    t = judge_turn([179.0, -178.0, 95.0, 90.0, 120.0, 150.0])
+    assert t.blocking is None
+
+
+@pytest.mark.parametrize("yaws,covered", [
+    ([0.0] * 30, 0.08),
+    (turning(30), 0.5),
+    (turning(8), 1.0),
+])
+def test_coverage_counts_how_much_of_the_half_turn_was_seen(yaws, covered):
+    assert judge_turn(yaws).coverage == pytest.approx(covered, abs=0.1)

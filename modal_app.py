@@ -40,12 +40,25 @@ COMMON_ENV = {
 }
 
 
+# Size comes from the GitHub release metadata; the digest does not, because
+# that release does not publish one. The hash below is recorded from the first
+# build and checked on every later one, so a silently changed file is caught
+# even though there is nothing upstream to compare against.
+NLF_BYTES = 493_117_974
+# Recorded from the build that downloaded it, and checked on every later one.
+# Not taken from upstream, because that release publishes no digest — so this
+# catches a file that changes under us, not a file that was wrong to begin with.
+NLF_SHA256: str | None = (
+    "52bee28edb6ea9148691331df87cfc238d7e3d9134dc60104a5aaed282a9ddad")
+
+
 def _bake_nlf() -> None:
     """Fetch the NLF weights at image build time.
 
     Half a gigabyte on the critical path of every cold start would be most of
     the wait, on a service that scales to zero.
     """
+    import hashlib
     import pathlib
     from urllib.request import urlopen
 
@@ -53,12 +66,18 @@ def _bake_nlf() -> None:
 
     p = pathlib.Path(NLF_PATH)
     p.parent.mkdir(parents=True, exist_ok=True)
+    digest = hashlib.sha256()
     with urlopen(NLF_WEIGHTS_URL) as r, open(p, "wb") as f:
         while chunk := r.read(1 << 22):
             f.write(chunk)
-    size = p.stat().st_size
-    assert size > 100_000_000, f"weights look wrong: {size} bytes"
-    print(f"baked NLF weights: {size / 1e6:.0f} MB")
+            digest.update(chunk)
+
+    size, got = p.stat().st_size, digest.hexdigest()
+    print(f"baked NLF weights: {size} bytes, sha256 {got}")
+    if size != NLF_BYTES:
+        raise RuntimeError(f"weights are {size} bytes, expected {NLF_BYTES}")
+    if NLF_SHA256 and got != NLF_SHA256:
+        raise RuntimeError(f"weights hash {got}, expected {NLF_SHA256}")
 
 
 base = (
@@ -101,6 +120,7 @@ app = modal.App("sartoria-engine", image=base)
 def measure(clip: bytes, height_cm: float, session_id: str, suffix: str = ".mp4") -> dict:
     """One clip in, one twin — or a refusal with a named cause."""
     import json
+    import os
     import tempfile
     from pathlib import Path
 
@@ -113,9 +133,13 @@ def measure(clip: bytes, height_cm: float, session_id: str, suffix: str = ".mp4"
     except NameError:
         _MODEL = nlf.load_model(NLF_PATH)
 
-    tmp = Path(tempfile.mkstemp(suffix=suffix)[1])
+    # mkstemp hands back an open descriptor as well as a path; taking only the
+    # path leaks it, and a container is reused across calls.
+    fd, name = tempfile.mkstemp(suffix=suffix)
+    tmp = Path(name)
     try:
-        tmp.write_bytes(clip)
+        with os.fdopen(fd, "wb") as f:
+            f.write(clip)
         out = run(tmp, height_cm, session_id, _MODEL)
         if out.twin is not None:
             body = json.loads(out.twin.to_json())
@@ -145,6 +169,9 @@ def measure(clip: bytes, height_cm: float, session_id: str, suffix: str = ".mp4"
     memory=2048,
     timeout=120,
     scaledown_window=300,
+    # The shared secret the front end's server signs tokens with. Absent, the
+    # endpoint runs open — which is right for a laptop and wrong anywhere else.
+    secrets=[modal.Secret.from_name("sartoria-token", required_keys=["SARTORIA_TOKEN_SECRET"])],
 )
 @modal.asgi_app()
 def engine():

@@ -17,10 +17,53 @@ from pathlib import Path
 
 import numpy as np
 
-from . import capture, config as C, nlf, twin as T
+from . import capture, config as C, mesh as M, nlf, twin as T
 
 CROWN_TOLERANCE = C.CROWN_TOLERANCE
 MIN_MEASURED_FRAMES = 4
+
+
+@dataclass
+class Turn:
+    """What the clip showed of the body turning."""
+    coverage: float
+    frontal_yaw: float | None
+    profile_yaw: float | None
+    blocking: str | None
+    coaching: str | None
+
+
+def judge_turn(yaws: list[float]) -> Turn:
+    """Whether the camera ever saw the side.
+
+    Depth is only measured if it did. From the front a body model still returns
+    a full mesh, but its depth there is the model's prior rather than anything
+    about this person — and frontal frames agree with one another, so agreement
+    between them would report high confidence in a number never observed.
+    """
+    folded = [((y + 90.0) % 180.0) - 90.0 for y in yaws]
+    if not folded:
+        return Turn(0.0, None, None,
+                    "We could not tell which way you were facing in any frame.",
+                    None)
+
+    frontal = min(folded, key=abs)
+    profile = max(folded, key=abs)
+    coverage = M.rotation_coverage(yaws)
+
+    saw_front = abs(frontal) <= C.FRONTAL_YAW_TOL_DEG
+    saw_side = abs(profile) >= C.PROFILE_YAW_MIN_DEG
+    if not (saw_front and saw_side):
+        missing = "from the side" if saw_front else "face on"
+        return Turn(coverage, frontal, profile,
+                    f"We never saw you {missing}. Turn all the way round "
+                    f"slowly — without a side view we would be guessing how "
+                    f"deep you are, not measuring it.", None)
+
+    coaching = (None if coverage >= C.ROTATION_COVERAGE_MIN else
+                "Turn more slowly next time — we caught the front and the "
+                "side, but not much in between.")
+    return Turn(coverage, frontal, profile, None, coaching)
 
 
 @dataclass
@@ -58,13 +101,16 @@ def run(video: str | Path, height_cm: float, session_id: str, model) -> SmplOutc
         outside.append(fm.outside_frame)
     frac = lambda k: sum(o[k] for o in outside) / len(outside)
 
+    turn = judge_turn([m.yaw for m in meshes])
+
     quality = T.CaptureQuality(
         head_visible=frac("top") <= CROWN_TOLERANCE,
         feet_visible=frac("bottom") <= CROWN_TOLERANCE,
         body_in_frame=max(frac("left"), frac("right")) <= CROWN_TOLERANCE,
         usable_frames=len(meshes),
-        rotation_coverage=0.0,
-        frontal_yaw_deg=None, profile_yaw_deg=None,
+        rotation_coverage=round(turn.coverage, 2),
+        frontal_yaw_deg=round(turn.frontal_yaw, 1) if turn.frontal_yaw is not None else None,
+        profile_yaw_deg=round(turn.profile_yaw, 1) if turn.profile_yaw is not None else None,
     )
 
     if not quality.head_visible:
@@ -80,6 +126,11 @@ def run(video: str | Path, height_cm: float, session_id: str, model) -> SmplOutc
         verdict.blocking.append(
             f"Only {len(meshes)} usable frames — we need at least "
             f"{MIN_MEASURED_FRAMES}. Film for about ten seconds.")
+
+    if turn.blocking:
+        verdict.blocking.append(turn.blocking)
+    if turn.coaching:
+        verdict.coaching.append(turn.coaching)
 
     out = SmplOutcome(None, verdict, quality, len(frames), len(meshes))
     out.scale_correction = round(float(np.median([m.scale_factor for m in meshes]) / 100.0), 3)

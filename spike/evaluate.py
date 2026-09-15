@@ -10,7 +10,7 @@ from __future__ import annotations
 import csv
 import json
 import statistics as stats
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import config as C
@@ -25,6 +25,12 @@ class SiteResult:
     p50_cm: float
     within_1cm: float
     within_2cm: float
+    # What calibration would actually leave behind, estimated honestly: for
+    # each person the offset is computed from everyone *else*, so the number
+    # is never fitted to the body it is scored on. None until there are enough
+    # people for that to mean anything.
+    mae_after_calibration_cm: float | None
+    errors: list[float] = field(default_factory=list)
 
 
 def load_truth(path: str | Path) -> dict[str, dict[str, float]]:
@@ -82,6 +88,8 @@ def compare(truth: dict[str, dict[str, float]],
             p50_cm=round(stats.median(absd), 2),
             within_1cm=round(sum(x <= 1.0 for x in absd) / len(absd), 3),
             within_2cm=round(sum(x <= 2.0 for x in absd) / len(absd), 3),
+            mae_after_calibration_cm=leave_one_out_mae(e),
+            errors=[round(x, 2) for x in e],
         ))
 
     summary = {
@@ -90,6 +98,27 @@ def compare(truth: dict[str, dict[str, float]],
         "sessions_rejected_or_missing": sum(1 for s in truth if s not in twins),
     }
     return results, summary
+
+
+MIN_FOR_CALIBRATION = 4
+
+
+def leave_one_out_mae(errors: list[float]) -> float | None:
+    """Mean absolute error once a per-site offset is removed — with the offset
+    for each person taken from the others.
+
+    Subtracting an offset computed from the same measurements it is scored on
+    is circular, and the earlier form, |MAE − |bias||, was worse than circular:
+    it hits zero for a single person no matter how large the error, and it is
+    not the debiased error for any n. It reported "about 0.0 cm once the
+    per-site bias is removed" from one body.
+    """
+    n = len(errors)
+    if n < MIN_FOR_CALIBRATION:
+        return None
+    total = sum(errors)
+    out = [abs(e - (total - e) / (n - 1)) for e in errors]
+    return round(stats.fmean(out), 2)
 
 
 def verdict(results: list[SiteResult]) -> str:
@@ -105,19 +134,20 @@ def verdict(results: list[SiteResult]) -> str:
     # error as gone is circular. Below this many, say what was seen and refuse
     # to draw the conclusion.
     n = min(r.n for r in key.values())
+    worst = max(r.mae_cm for r in key.values())
     if n < 5:
-        worst_raw = max(r.mae_cm for r in key.values())
         return (f"NO VERDICT — {n} "
                 f"{'person' if n == 1 else 'people'} is not a sample. Worst of "
-                f"waist/inseam so far: {worst_raw:.1f} cm. A per-site bias "
+                f"waist/inseam so far: {worst:.1f} cm. A per-site offset "
                 f"cannot be separated from one body's idiosyncrasy yet.")
-    worst = max(r.mae_cm for r in key.values())
-    corrected = max(abs(r.mae_cm - abs(r.bias_cm)) for r in key.values())
+    loo = [r.mae_after_calibration_cm for r in key.values()]
+    corrected = max(loo) if all(v is not None for v in loo) else None
     if worst <= 2.0:
         return f"VIDEO ROUTE HOLDS — worst of waist/inseam is {worst:.1f} cm MAE"
-    if corrected <= 2.0:
+    if corrected is not None and corrected <= 2.0:
         return (f"VIDEO ROUTE HOLDS AFTER CALIBRATION — {worst:.1f} cm raw, "
-                f"about {corrected:.1f} cm once the per-site bias is removed")
+                f"{corrected:.1f} cm with a per-site offset held out of its "
+                f"own fit")
     if worst <= 4.0:
         return (f"BORDERLINE at {worst:.1f} cm MAE — usable only with the "
                 f"wardrobe anchor as a cross-check")
@@ -128,11 +158,14 @@ def verdict(results: list[SiteResult]) -> str:
 def report(results: list[SiteResult], summary: dict) -> str:
     w = 9
     head = (f"{'site':<9}{'n':>4}{'bias':>{w}}{'MAE':>{w}}{'median':>{w}}"
-            f"{'≤1cm':>{w}}{'≤2cm':>{w}}")
+            f"{'≤1cm':>{w}}{'≤2cm':>{w}}{'calib':>{w}}")
     lines = [head, "-" * len(head)]
     for r in results:
+        cal = ("—" if r.mae_after_calibration_cm is None
+               else f"{r.mae_after_calibration_cm:.2f}")
         lines.append(f"{r.name:<9}{r.n:>4}{r.bias_cm:>+{w}.2f}{r.mae_cm:>{w}.2f}"
-                     f"{r.p50_cm:>{w}.2f}{r.within_1cm:>{w}.0%}{r.within_2cm:>{w}.0%}")
+                     f"{r.p50_cm:>{w}.2f}{r.within_1cm:>{w}.0%}{r.within_2cm:>{w}.0%}"
+                     f"{cal:>{w}}")
     lines += ["", f"sessions with ground truth : {summary['sessions_with_truth']}",
               f"measured                   : {summary['sessions_measured']}",
               f"rejected or missing        : {summary['sessions_rejected_or_missing']}",
@@ -145,7 +178,10 @@ def write_csv(results: list[SiteResult], path: str | Path) -> None:
     with open(path, "w", newline="", encoding="utf-8") as f:
         wr = csv.writer(f)
         wr.writerow(["site", "n", "bias_cm", "mae_cm", "median_cm",
-                     "within_1cm", "within_2cm"])
+                     "within_1cm", "within_2cm", "mae_after_calibration_cm",
+                     "errors_cm"])
         for r in results:
             wr.writerow([r.name, r.n, r.bias_cm, r.mae_cm, r.p50_cm,
-                         r.within_1cm, r.within_2cm])
+                         r.within_1cm, r.within_2cm,
+                         r.mae_after_calibration_cm,
+                         " ".join(f"{e:+.2f}" for e in r.errors)])

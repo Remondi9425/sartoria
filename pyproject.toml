@@ -4,9 +4,17 @@ version = "0.1.0"
 description = "Does a phone video give leg measurements good enough to pick a jeans size?"
 requires-python = ">=3.12,<3.13"
 dependencies = [
-    "mediapipe>=0.10.14",
     "opencv-python>=4.10",
-    "numpy>=1.26,<2.3",
+    # Pinned below 2 to match the Modal image, which mediapipe's successor
+    # constraints once forced and torch still prefers. Letting the two drift
+    # meant the local tests and the worker ran different array semantics.
+    "numpy>=1.26,<2",
+    "fastapi>=0.115",
+    "python-multipart>=0.0.9",
+    "modal>=1.5",
+    # cbor2 6.x publishes no macOS x86_64 wheel and falls back to building a
+    # Rust extension. This machine is an Intel Mac.
+    "cbor2<6",
     "pytest>=8.0",
 ]
 

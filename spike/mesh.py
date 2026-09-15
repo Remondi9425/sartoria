@@ -155,7 +155,7 @@ def drop_specks(xz: np.ndarray, min_fraction: float = 0.08,
     # distance to zero and collapses the linking distance to nothing.
     nn = d.min(axis=1)
     nn = nn[np.isfinite(nn)]
-    extent = float(max(xz[:, 0].ptp(), xz[:, 1].ptp()))
+    extent = float(max(np.ptp(xz[:, 0]), np.ptp(xz[:, 1])))
     if extent <= 0:
         return xz
     eps = max(float(np.quantile(nn, 0.75)) * link_factor if len(nn) else 0.0,
@@ -312,3 +312,28 @@ def strip_chains(points: Points, chains: list[np.ndarray],
         for a, b in zip(chain[:-1], chain[1:]):
             keep &= _point_segment_distance(points, a, b) > radius
     return points[keep]
+
+
+# ── how far round the body turned ───────────────────────────────────────────
+def yaw_deg(hip_l: np.ndarray, hip_r: np.ndarray) -> float:
+    """Body rotation about the vertical, in the camera's frame.
+
+    0 is square to the camera, ±90 is side-on. Taken from the hip axis rather
+    than the shoulders, because arms swing and shoulders roll while the pelvis
+    holds the direction the body is actually facing.
+    """
+    d = np.asarray(hip_r, float) - np.asarray(hip_l, float)
+    return float(np.degrees(np.arctan2(d[2], d[0])))
+
+
+def rotation_coverage(yaws: list[float]) -> float:
+    """How much of a half-turn the clip shows, 0..1.
+
+    Twelve 15-degree buckets across ±90; the fraction holding at least one
+    frame. A clip that never turns scores near zero however long it runs.
+    """
+    if not yaws:
+        return 0.0
+    seen = {min(11, max(0, int((y + 90.0) / 15.0)))
+            for y in (((v + 90.0) % 180.0) - 90.0 for v in yaws)}
+    return len(seen) / 12.0
