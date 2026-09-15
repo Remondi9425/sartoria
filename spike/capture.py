@@ -23,8 +23,6 @@ class UnreadableClip(RuntimeError):
 class Frame:
     index: int
     image: np.ndarray           # BGR
-    blur: float                 # variance of Laplacian — higher is sharper
-    brightness: float
 
 
 @dataclass
@@ -72,20 +70,18 @@ def read_frames(path: str | Path, target: int = C.TARGET_FRAMES) -> list[Frame]:
     wanted = set(np.linspace(0, max(total - 1, 0), min(target, max(total, 1)),
                              dtype=int).tolist()) if total else None
 
+    # grab() advances the stream without decoding the picture; retrieve()
+    # decodes only the frames that were asked for. A ten-second clip holds
+    # about 300 frames of which 90 are kept, and decoding all of them at
+    # 1080p was most of the time a warm scan spent before the model ran.
     frames, i = [], 0
-    while True:
-        ok, img = cap.read()
-        if not ok:
-            break
+    while cap.grab():
         if wanted is None or i in wanted:
-            if rotation and not applied:          # older builds ignore the flag
-                img = _rotate(img, rotation)
-            grey = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            frames.append(Frame(
-                index=i, image=img,
-                blur=float(cv2.Laplacian(grey, cv2.CV_64F).var()),
-                brightness=float(grey.mean()),
-            ))
+            ok, img = cap.retrieve()
+            if ok:
+                if rotation and not applied:      # older builds ignore the flag
+                    img = _rotate(img, rotation)
+                frames.append(Frame(index=i, image=img))
         i += 1
     cap.release()
     if not frames:

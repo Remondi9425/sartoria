@@ -57,10 +57,18 @@ Nothing heavy is installed on a laptop.
 
 **Deployed:** `https://remondi9425--sartoria-engine-engine.modal.run`
 
-Measured on the live service: about **4 s** warm end to end (2.4 s of that
-server-side), and **110 s** cold — a GPU container plus loading half a gigabyte
-of TorchScript. Baking the weights into the image is why the cold start is not
-much worse.
+Measured on the live service with the NLF engine, on a 15 MB 1080p clip:
+about **17 s** warm end to end before the decoding change below, and **143 s**
+cold — a GPU container, half a gigabyte of TorchScript, and TorchScript's own
+first-call optimisation. Baking the weights into the image is why the cold
+start is not worse still.
+
+Three knobs keep scans off the cold path. The GPU container now stays up for
+fifteen idle minutes (`SARTORIA_SCALEDOWN_S`); the model is loaded and warmed
+when the container starts rather than inside the first scan; and for a demo,
+`SARTORIA_MIN_CONTAINERS=1 .venv/bin/modal deploy modal_app.py` keeps one
+container warm at all times, billed while idle. The video decoder only decodes
+the frames it keeps, which was most of the warm time before the model ran.
 
 After a redeploy, containers warm from the previous version keep serving for a
 minute or so. If a change seems not to have landed, that is usually why.

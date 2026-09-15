@@ -11,6 +11,7 @@ would mean testing something other than what ships.
 """
 from __future__ import annotations
 
+import inspect
 import logging
 import os
 import re
@@ -18,7 +19,7 @@ import tempfile
 import uuid
 from dataclasses import asdict
 from pathlib import Path
-from typing import Any, Callable, Protocol
+from typing import Any, Awaitable, Callable, Protocol
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -79,9 +80,12 @@ log = logging.getLogger("sartoria.engine")
 
 
 class SubmitFn(Protocol):
-    """Start the measurement and return a handle. Must not block."""
+    """Start the measurement and return a handle, or an awaitable of one.
+
+    Must not block: the endpoint that calls it is async, and a synchronous
+    hand-off to the GPU held the whole server for the seconds it took."""
     def __call__(self, clip: bytes, height_cm: float, session_id: str,
-                 suffix: str, debug: bool) -> str: ...
+                 suffix: str, debug: bool) -> str | Awaitable[str]: ...
 
 
 class PollFn(Protocol):
@@ -235,6 +239,8 @@ def make_app(submit_fn: SubmitFn | Callable[..., str],
             clip, suffix = _read(video)
             job_id = submit_fn(clip=clip, height_cm=_height(height_cm),
                                session_id=sid, suffix=suffix, debug=False)
+            if inspect.isawaitable(job_id):
+                job_id = await job_id
             return JSONResponse({"status": "accepted", "job_id": job_id,
                                  "session_id": sid}, status_code=202)
         except Rejected as e:
@@ -282,12 +288,12 @@ def make_app(submit_fn: SubmitFn | Callable[..., str],
         _require_token(request, starts)
         try:
             clip, suffix = _read(video)
-            return JSONResponse({
-                "status": "accepted",
-                "job_id": submit_fn(clip=clip, height_cm=_height(height_cm),
-                                    session_id="debug", suffix=suffix,
-                                    debug=True)},
-                status_code=202)
+            job_id = submit_fn(clip=clip, height_cm=_height(height_cm),
+                               session_id="debug", suffix=suffix, debug=True)
+            if inspect.isawaitable(job_id):
+                job_id = await job_id
+            return JSONResponse({"status": "accepted", "job_id": job_id},
+                                status_code=202)
         except Rejected as e:
             return JSONResponse({"error": str(e)}, status_code=400)
         except Exception:

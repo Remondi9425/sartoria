@@ -23,9 +23,10 @@ def main() -> int:
     ap.add_argument("--out", type=Path, default=Path("out/probe.json"))
     a = ap.parse_args()
 
-    fn = modal.Function.from_name("sartoria-engine", "measure")
-    body = fn.remote(clip=a.video.read_bytes(), height_cm=a.height,
-                     session_id=a.video.stem, suffix=a.video.suffix or ".mp4")
+    measurer = modal.Cls.from_name("sartoria-engine", "Measurer")()
+    body = measurer.measure.remote(
+        clip=a.video.read_bytes(), height_cm=a.height,
+        session_id=a.video.stem, suffix=a.video.suffix or ".mp4", debug=True)
     a.out.parent.mkdir(parents=True, exist_ok=True)
     a.out.write_text(json.dumps(body, indent=2))
     print(f"wrote {a.out}")

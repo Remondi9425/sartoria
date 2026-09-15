@@ -18,7 +18,8 @@ import numpy as np
 from . import config as C
 from . import mesh as M
 
-NLF_WEIGHTS_URL = "https://github.com/isarandi/nlf/releases/download/v0.3.2/nlf_l_multi_0.3.2.torchscript"
+# The weights URL, size and hash are pinned in modal_app.py, where they are
+# used at image build time.
 
 # SMPL's 24-joint kinematic tree. Asserted at runtime rather than trusted.
 J_PELVIS, J_HIP_L, J_HIP_R = 0, 1, 2
