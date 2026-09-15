@@ -4,10 +4,21 @@ import { LegDiagram } from "@/components/art/LegDiagram";
 import { Body, Button, Eyebrow, Footer, Note, Screen, StubBadge, Title } from "@/components/ui";
 import type { DigitalTwin } from "@/lib/engine/types";
 
+/**
+ * What the tier can honestly claim.
+ *
+ * It says how well this video agreed with itself, which is the only evidence
+ * the pipeline has: there is no tape measure inside it. Whether that agreement
+ * means the numbers are *right* is a separate question, and the answer so far
+ * is one person — `scripts/evaluate.py` refuses to give a verdict below five.
+ *
+ * "Good enough to pick a size" was a claim about accuracy made from a
+ * consistency check.
+ */
 const TIER_NOTE: Record<string, string> = {
-  A: "Every measurement came out clean.",
-  B: "Good enough to pick a size. A couple of the smaller numbers are softer.",
-  C: "Usable, but we would rather you confirmed the waist yourself.",
+  A: "The waist, seat and leg lengths came out the same in every frame.",
+  B: "Consistent across this video, with a couple of the smaller numbers softer.",
+  C: "The frames disagreed enough that we would rather you checked the waist.",
 };
 
 export function Measurements({
@@ -40,9 +51,10 @@ export function Measurements({
         <div className="rounded-xl bg-paper px-4 py-3">
           <p className="text-[12px] leading-[1.5] text-mute">
             <span className="font-semibold text-ink">
-              Quality {twin.data_quality_tier}.
+              Consistency {twin.data_quality_tier}.
             </span>{" "}
-            {TIER_NOTE[twin.data_quality_tier]}
+            {TIER_NOTE[twin.data_quality_tier]} How close that is to a tape
+            measure is still being established.
           </p>
         </div>
 

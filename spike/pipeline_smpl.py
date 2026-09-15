@@ -88,7 +88,8 @@ class SmplOutcome:
     frame_detail: list[dict] = field(default_factory=list)
 
 
-def run(video: str | Path, height_cm: float, session_id: str, model) -> SmplOutcome:
+def run(video: str | Path, height_cm: float, session_id: str, model,
+        debug: bool = False) -> SmplOutcome:
     frames = capture.read_frames(video)
     images = [f.image for f in frames]
 
@@ -147,14 +148,20 @@ def run(video: str | Path, height_cm: float, session_id: str, model) -> SmplOutc
         verdict.ok = False
         return out
 
-    out.probe = nlf.probe(meshes[len(meshes) // 2])
     paired = [(fm, nlf.measure_one(fm)) for fm in meshes]
-    out.frame_detail = [
-        {"uncertainty": round(fm.uncertainty, 2),
-         "waist": round(m["waist"], 1), "hip": round(m["hip"], 1),
-         "thigh": round(m["thigh"], 1), "knee": round(m["knee"], 1)}
-        for fm, m in paired if m]
     per_frame = [m for _, m in paired if m]
+
+    # Only when asked. The probe renders the body as a picture — a scan of a
+    # person — and the per-frame table is their measurements several times
+    # over. Computing both on every ordinary request put biometric data on the
+    # wire for a client that throws it away.
+    if debug:
+        out.probe = nlf.probe(meshes[len(meshes) // 2])
+        out.frame_detail = [
+            {"uncertainty": round(fm.uncertainty, 2),
+             "waist": round(m["waist"], 1), "hip": round(m["hip"], 1),
+             "thigh": round(m["thigh"], 1), "knee": round(m["knee"], 1)}
+            for fm, m in paired if m]
     out.per_frame = per_frame
     out.measured = len(per_frame)
 

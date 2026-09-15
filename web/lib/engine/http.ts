@@ -6,7 +6,7 @@
  * two files are the same contract in two languages, which is why neither has a
  * translation layer.
  */
-import { parseTwin } from "./contract";
+import { parseRejection, parseTwin } from "./contract";
 import type {
   AnalyseInput, CaptureQuality, CaptureResult, MeasurementEngine,
 } from "./types";
@@ -23,6 +23,7 @@ const PHASES: [number, string][] = [
 
 const POLL_MS = 2_000;
 const MAX_POLLS = 150;          // five minutes, well past a cold start
+const MAX_CONSECUTIVE_FAILURES = 5;
 
 const sleep = (ms: number, signal?: AbortSignal) =>
   new Promise<void>((resolve, reject) => {
@@ -39,15 +40,14 @@ const UNKNOWN_QUALITY: CaptureQuality = {
   frontal_yaw_deg: null, profile_yaw_deg: null,
 };
 
-/** A refusal the worker produced, passed through unchanged. */
+/** A refusal the worker produced — validated, not cast. */
 function asRejection(body: Record<string, unknown>): CaptureResult {
-  return {
-    status: "capture_rejected",
-    reason: String(body.reason ?? "That capture could not be used."),
-    all_reasons: (body.all_reasons as string[]) ?? [String(body.reason ?? "")],
-    coaching: (body.coaching as string[]) ?? [],
-    capture_quality: (body.capture_quality as CaptureQuality) ?? UNKNOWN_QUALITY,
-  };
+  try {
+    return { status: "capture_rejected", ...parseRejection(body) };
+  } catch {
+    return rejected("That capture could not be used, and the engine did not "
+                    + "say why in a form we could read.");
+  }
 }
 
 
@@ -61,15 +61,39 @@ function rejected(reason: string, quality = UNKNOWN_QUALITY): CaptureResult {
   };
 }
 
-/** A token from our own server, which is the only side that holds the secret. */
-async function engineToken(signal?: AbortSignal): Promise<string | null> {
+type Ticket =
+  | { kind: "token"; token: string }
+  | { kind: "open" }
+  | { kind: "refused"; message: string };
+
+/** A token from our own server, which is the only side that holds the secret.
+ *
+ *  Its failures are told apart on purpose. Swallowing them into `null` meant a
+ *  429 here surfaced as a 401 from the engine two calls later — the person was
+ *  told the app was not authorised when in fact they had simply asked too
+ *  often. */
+async function engineTicket(signal?: AbortSignal): Promise<Ticket> {
+  let res: Response;
   try {
-    const res = await fetch("/api/engine-token", { method: "POST", signal });
-    if (!res.ok) return null;
-    return (await res.json()).token ?? null;
+    res = await fetch("/api/engine-token", { method: "POST", signal });
   } catch {
-    return null;
+    return { kind: "refused", message:
+      "We could not reach this app's own server to start a scan." };
   }
+  if (res.status === 429) {
+    return { kind: "refused", message:
+      "That is a lot of scans in a short time. Give it a few minutes." };
+  }
+  if (!res.ok) {
+    return { kind: "refused", message:
+      "This app could not authorise a scan. Its shared secret is probably "
+      + "missing or out of date." };
+  }
+  const body = await res.json().catch(() => ({}));
+  if (body.token) return { kind: "token", token: body.token };
+  if (body.open) return { kind: "open" };
+  return { kind: "refused", message:
+    "This app could not authorise a scan." };
 }
 
 
@@ -102,8 +126,10 @@ export function createHttpEngine(baseUrl: string): MeasurementEngine {
         form.append("height_cm", String(heightCm));
 
         tick(0.05);
-        const token = await engineToken(signal);
-        const auth: HeadersInit = token ? { authorization: `Bearer ${token}` } : {};
+        const ticket_ = await engineTicket(signal);
+        if (ticket_.kind === "refused") return rejected(ticket_.message);
+        const auth: HeadersInit = ticket_.kind === "token"
+          ? { authorization: `Bearer ${ticket_.token}` } : {};
 
         const submit = await fetch(`${baseUrl}/analyse`, {
           method: "POST", body: form, headers: auth, signal,
@@ -131,13 +157,34 @@ export function createHttpEngine(baseUrl: string): MeasurementEngine {
         // Then wait. A cold container takes about two minutes; a warm one
         // twenty seconds. The bar reflects elapsed time honestly and stops
         // short of the end, because we are not told how far along it is.
+        let consecutiveFailures = 0;
         for (let i = 0; i < MAX_POLLS; i++) {
           await sleep(POLL_MS, signal);
           tick(Math.min(0.94, 0.05 + (Date.now() - began) / 150_000));
+
           const res = await fetch(`${baseUrl}/result/${ticket.job_id}`,
                                   { headers: auth, signal });
-          if (!res.ok) continue;
-          const body = await res.json();
+          // A token that has expired or a limit that has been hit will not fix
+          // itself by asking again for five minutes.
+          if (res.status === 401) {
+            return rejected("The scan lost its authorisation partway through. "
+                            + "Please try again.");
+          }
+          if (res.status === 429) {
+            return rejected("That is a lot of scans in a short time. Give it "
+                            + "a few minutes.");
+          }
+          if (!res.ok) {
+            if (++consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+              return rejected("We lost contact with the measuring service "
+                              + "while it was working. Please try again.");
+            }
+            continue;
+          }
+          consecutiveFailures = 0;
+
+          const body = await res.json().catch(() => null);
+          if (body === null) continue;
           if (body.status === "working") continue;
 
           onProgress?.({ fraction: 1, hint: "Done" });

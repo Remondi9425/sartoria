@@ -117,7 +117,8 @@ app = modal.App("sartoria-engine", image=base)
     scaledown_window=60,
     max_containers=2,
 )
-def measure(clip: bytes, height_cm: float, session_id: str, suffix: str = ".mp4") -> dict:
+def measure(clip: bytes, height_cm: float, session_id: str, suffix: str = ".mp4",
+            debug: bool = False) -> dict:
     """One clip in, one twin — or a refusal with a named cause."""
     import json
     import os
@@ -140,24 +141,27 @@ def measure(clip: bytes, height_cm: float, session_id: str, suffix: str = ".mp4"
     try:
         with os.fdopen(fd, "wb") as f:
             f.write(clip)
-        out = run(tmp, height_cm, session_id, _MODEL)
+        out = run(tmp, height_cm, session_id, _MODEL, debug=debug)
         if out.twin is not None:
             body = json.loads(out.twin.to_json())
             body["status"] = "ok"
         else:
             body = json.loads(T.refused(session_id, height_cm, out.verdict, out.quality))
+        # Counts and spreads are cheap and carry nothing identifying, so they
+        # travel with every answer. The probe and the per-frame table do not.
         body["diagnostics"] = {
             "frames_read": out.frames_read,
             "meshes": out.meshes,
             "measured_frames": out.measured,
             "scale_correction": out.scale_correction,
             "mean_vertex_uncertainty": out.mean_uncertainty,
-            # How far the frames disagree, per site. With no tape measure inside
-            # the pipeline this is the only evidence a number is real.
+            # How far the frames disagree, per site. With no tape measure
+            # inside the pipeline this is the only evidence a number is real.
             "spread_cm": out.spreads,
-            "probe": out.probe,
-            "per_frame": out.frame_detail,
         }
+        if debug:
+            body["diagnostics"]["probe"] = out.probe
+            body["diagnostics"]["per_frame"] = out.frame_detail
         return body
     finally:
         tmp.unlink(missing_ok=True)
@@ -178,9 +182,11 @@ def engine():
     """The HTTP front. Cheap, and it never waits for the GPU."""
     from spike.serve import make_app
 
-    def submit(clip: bytes, height_cm: float, session_id: str, suffix: str) -> str:
+    def submit(clip: bytes, height_cm: float, session_id: str, suffix: str,
+               debug: bool = False) -> str:
         return measure.spawn(clip=clip, height_cm=height_cm,
-                             session_id=session_id, suffix=suffix).object_id
+                             session_id=session_id, suffix=suffix,
+                             debug=debug).object_id
 
     def poll(job_id: str):
         call = modal.FunctionCall.from_id(job_id)

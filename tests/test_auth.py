@@ -68,8 +68,8 @@ def test_polling_is_not_budgeted_like_starting_a_job():
 def test_a_token_is_no_use_from_another_address():
     """It cannot say who a person is — the app hands one to anybody who asks —
     but it can say the holder is not who it was issued to."""
-    mine = caller_id("203.0.113.7")
-    theirs = caller_id("198.51.100.9")
+    mine = caller_id("203.0.113.7", SECRET)
+    theirs = caller_id("198.51.100.9", SECRET)
     token = mint(SECRET, who=mine)
     assert verify(token, SECRET, who=mine)["w"] == mine
     with pytest.raises(TokenError):
@@ -79,13 +79,30 @@ def test_a_token_is_no_use_from_another_address():
 def test_an_unbound_token_still_works_anywhere():
     """Binding narrows a token; it is not a second secret, and an old token
     without a handle must not start failing."""
-    assert verify(mint(SECRET), SECRET, who=caller_id("203.0.113.7"))
+    assert verify(mint(SECRET), SECRET, who=caller_id("203.0.113.7", SECRET))
+
+
+def test_a_bound_token_fails_closed_when_the_caller_is_unknown():
+    """Omitting the caller must not skip the check. It did, and the binding
+    sat in the codebase doing nothing at all."""
+    token = mint(SECRET, who=caller_id("203.0.113.7", SECRET))
+    with pytest.raises(TokenError):
+        verify(token, SECRET)
+
+
+def test_the_caller_handle_is_keyed_not_a_lookup_table():
+    """There are four billion IPv4 addresses. A bare digest of one is
+    reversible by trying them all."""
+    import hashlib
+    ip = "203.0.113.7"
+    assert caller_id(ip, SECRET) != hashlib.sha256(ip.encode()).hexdigest()[:16]
+    assert caller_id(ip, SECRET) != caller_id(ip, "another secret")
 
 
 def test_the_address_itself_is_never_written_into_the_token():
     """The token travels through a browser. An IP is personal data that does
     not need to go with it."""
-    token = mint(SECRET, who=caller_id("203.0.113.7"))
+    token = mint(SECRET, who=caller_id("203.0.113.7", SECRET))
     assert "203.0.113.7" not in token
     import base64
     body = base64.urlsafe_b64decode(token.split(".")[0] + "==").decode()

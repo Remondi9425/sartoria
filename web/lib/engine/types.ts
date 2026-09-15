@@ -134,7 +134,12 @@ export interface FitRecommendation {
   headline: string;                  // "True to size for you"
   areas: AreaNote[];
   alternative: string | null;        // the next size, when it is close
+  /** How sure we are of the *size*: waist and seat. */
   confidence: Confidence;
+  /** How sure we are of the *length*: the inseam. A size can be solid while
+   *  the leg length is not, and one number for both let a hem note carry the
+   *  same authority as the size. */
+  length_confidence: Confidence;
   /** Which measurements the decision actually used. Auditable by design. */
   used: MeasurementSite[];
 }

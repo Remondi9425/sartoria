@@ -38,13 +38,17 @@ def _unb64(s: str) -> bytes:
     return base64.urlsafe_b64decode(s + "=" * (-len(s) % 4))
 
 
-def caller_id(raw: str | None) -> str:
-    """A stable, non-reversible handle for whoever is asking.
+def caller_id(raw: str | None, secret: str) -> str:
+    """A stable handle for whoever is asking, that cannot be read back.
 
-    The address itself is never written into a token: the token travels through
-    a browser, and an IP is personal data that does not need to.
+    Keyed, not a bare digest. There are only four billion IPv4 addresses, so a
+    plain SHA-256 of one is reversible by trying them all — which makes it a
+    slow lookup table rather than a one-way function. The address itself never
+    goes into a token: the token travels through a browser, and an address is
+    personal data that has no reason to.
     """
-    return hashlib.sha256((raw or "unknown").encode()).hexdigest()[:16]
+    return hmac.new(secret.encode(), (raw or "unknown").encode(),
+                    hashlib.sha256).hexdigest()[:16]
 
 
 def mint(secret: str, ttl_seconds: int = 900, purpose: str = "measure",
@@ -88,11 +92,16 @@ def verify(token: str, secret: str, purpose: str = "measure",
         raise TokenError("no expiry")
     if payload["exp"] < time.time():
         raise TokenError("expired")
-    # A token minted for one caller is no use to another. Only enforced when
-    # the token carries a handle, so an unbound token stays valid — it is a
-    # narrowing, not a second secret.
-    if payload.get("w") and who and payload["w"] != who:
-        raise TokenError("token was issued to a different caller")
+    # A token minted for one caller is no use to another. Fail closed: a
+    # verifier that cannot say who is asking must not be able to skip the
+    # check by omission, which is how the binding came to be dead code the
+    # first time it went in.
+    bound = payload.get("w")
+    if bound:
+        if not who:
+            raise TokenError("token is bound but the caller is unknown")
+        if not hmac.compare_digest(str(bound), who):
+            raise TokenError("token was issued to a different caller")
     return payload
 
 

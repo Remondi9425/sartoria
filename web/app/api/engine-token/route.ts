@@ -11,7 +11,7 @@
  * serverless instance. The limit below is per-instance and resets on every
  * cold start — it blunts a loop from one address, not a determined caller.
  */
-import { createHash, createHmac } from "node:crypto";
+import { createHmac } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 
 export const runtime = "nodejs";
@@ -27,9 +27,13 @@ function b64url(raw: Buffer | string): string {
   return Buffer.from(raw).toString("base64url");
 }
 
-/** Matches spike/auth.py caller_id: the address is hashed, never carried. */
-function callerId(address: string | null): string {
-  return createHash("sha256").update(address || "unknown")
+/** Matches spike/auth.py caller_id exactly, including the key.
+ *
+ *  Keyed rather than a bare digest: there are four billion IPv4 addresses, so
+ *  a plain hash of one is reversible by trying them all. The address itself is
+ *  never put in the token — that travels through a browser. */
+function callerId(address: string | null, secret: string): string {
+  return createHmac("sha256", secret).update(address || "unknown")
     .digest("hex").slice(0, 16);
 }
 
@@ -56,7 +60,7 @@ export async function POST(request: NextRequest) {
 
   const address = request.headers.get("x-forwarded-for")?.split(",")[0].trim()
                   ?? null;
-  const who = callerId(address);
+  const who = callerId(address, secret);
   if (tooMany(who)) {
     return NextResponse.json({ error: "too many requests" }, { status: 429 });
   }

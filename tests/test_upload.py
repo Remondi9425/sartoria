@@ -32,3 +32,23 @@ def test_anything_else_is_refused(data):
 def test_a_video_name_on_other_bytes_does_not_help():
     """The name is never consulted — this is the case that used to pass."""
     assert sniff_container(b"#!/bin/sh\nrm -rf /\n" + b"\x00" * 64) is None
+
+
+# ── the decode gate ─────────────────────────────────────────────────────────
+def test_forged_headers_do_not_reach_the_gpu(tmp_path):
+    """Twelve bytes of header are cheap to fake and prove nothing. What costs
+    money is a GPU container spinning up on data that was never a video."""
+    from spike.serve import decodes_to_a_frame
+    forged = MP4 + b"\x00" * 4096
+    assert sniff_container(forged) == ".mp4", "the header passes the sniff"
+    assert decodes_to_a_frame(forged, ".mp4") is False, "but nothing decodes"
+
+
+def test_a_real_clip_decodes():
+    import pathlib
+    from spike.serve import decodes_to_a_frame
+    clip = pathlib.Path("IMG_6953.MOV")
+    if not clip.exists():
+        import pytest as _p
+        _p.skip("no sample clip on this machine")
+    assert decodes_to_a_frame(clip.read_bytes(), ".mp4") is True

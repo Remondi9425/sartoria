@@ -53,11 +53,12 @@ export const sizeCalculator = {
   recommend(twin: DigitalTwin, product: Product): FitRecommendation {
     const used: MeasurementSite[] = ["waist", "hip", "inseam"];
     const m = twin.measurements_cm;
-    const conf = weakest(
-      twin.measurement_confidence.waist,
-      twin.measurement_confidence.hip,
-      twin.measurement_confidence.inseam,
-    );
+    // Two answers, two confidences. The size comes from the waist and seat;
+    // the hem comes from the inseam alone. Folding them into one number meant
+    // a shaky inseam could be reported with the size's authority.
+    const conf = weakest(twin.measurement_confidence.waist,
+                         twin.measurement_confidence.hip);
+    const lengthConf = twin.measurement_confidence.inseam;
 
     const rows = product.chart.rows.map((r) => toBodyRange(r, product.chart));
 
@@ -85,6 +86,7 @@ export const sizeCalculator = {
         areas: [],
         alternative: nearest.r?.label ?? null,
         confidence: "low",
+        length_confidence: lengthConf,
         used,
       };
     }
@@ -110,8 +112,10 @@ export const sizeCalculator = {
     }
 
     // Positive spare means length to turn up; negative means they run short.
+    // Withheld when the inseam itself is shaky: "+3 cm" reads as a fact, and a
+    // low-confidence inseam cannot support one.
     const spare = chosen.inseam_cm - m.inseam;
-    if (Math.abs(spare) >= HEM_TOLERANCE_CM) {
+    if (lengthConf !== "low" && Math.abs(spare) >= HEM_TOLERANCE_CM) {
       areas.push({
         area: "hem",
         verdict: spare > 0 ? "roomy" : "snug",
@@ -139,6 +143,7 @@ export const sizeCalculator = {
     return {
       size: chosen.label,
       headline,
+      length_confidence: lengthConf,
       areas,
       alternative: neighbour?.label ?? null,
       confidence: conf,

@@ -126,3 +126,40 @@ export function parseTwin(body: unknown): DigitalTwin {
     created_at: String(b.created_at ?? ""),
   };
 }
+
+
+/**
+ * A refusal, checked like anything else that crosses the wire.
+ *
+ * It reaches a screen that shows the reason to a person and reads
+ * capture_quality into a checklist, so "whatever arrived, cast" was the same
+ * mistake here as it was for the twin — just quieter, because a refusal is
+ * already bad news and nobody looks twice.
+ */
+export function parseRejection(body: unknown): {
+  reason: string; all_reasons: string[]; coaching: string[];
+  capture_quality: CaptureQuality;
+} {
+  const b = obj(body, "refusal");
+  if (b.status !== "capture_rejected") {
+    throw new ContractError(`status is ${JSON.stringify(b.status)}`);
+  }
+  const reason = b.reason;
+  if (typeof reason !== "string" || !reason.trim()) {
+    throw new ContractError("a refusal with no reason is not a refusal");
+  }
+  const strings = (v: unknown, what: string): string[] => {
+    if (v === undefined) return [];
+    if (!Array.isArray(v) || v.some((x) => typeof x !== "string")) {
+      throw new ContractError(`${what} is not a list of strings`);
+    }
+    return v as string[];
+  };
+  return {
+    reason,
+    all_reasons: strings(b.all_reasons, "all_reasons").length
+      ? strings(b.all_reasons, "all_reasons") : [reason],
+    coaching: strings(b.coaching, "coaching"),
+    capture_quality: quality(b.capture_quality),
+  };
+}

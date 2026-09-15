@@ -14,8 +14,10 @@ from __future__ import annotations
 import logging
 import os
 import re
+import tempfile
 import uuid
 from dataclasses import asdict
+from pathlib import Path
 from typing import Any, Callable, Protocol
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
@@ -45,13 +47,41 @@ def sniff_container(data: bytes) -> str | None:
             return suffix
     return None
 
+
+def decodes_to_a_frame(data: bytes, suffix: str) -> bool:
+    """Whether a decoder can actually get a picture out of this.
+
+    Twelve bytes of header are cheap to forge and prove nothing; what costs
+    money is a GPU container spinning up on data that was never a video. This
+    runs on the CPU front, where a failed decode costs a fraction of a second.
+    """
+    import cv2
+
+    fd, name = tempfile.mkstemp(suffix=suffix)
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+        cap = cv2.VideoCapture(name)
+        try:
+            if not cap.isOpened():
+                return False
+            ok, frame = cap.read()
+            return bool(ok and frame is not None and frame.size)
+        finally:
+            cap.release()
+    except Exception:
+        log.exception("decode check blew up")
+        return False
+    finally:
+        Path(name).unlink(missing_ok=True)
+
 log = logging.getLogger("sartoria.engine")
 
 
 class SubmitFn(Protocol):
     """Start the measurement and return a handle. Must not block."""
     def __call__(self, clip: bytes, height_cm: float, session_id: str,
-                 suffix: str) -> str: ...
+                 suffix: str, debug: bool) -> str: ...
 
 
 class PollFn(Protocol):
@@ -107,18 +137,20 @@ def _require_token(request: Request, limiter: RateLimit | None = None) -> None:
     if not secret:
         return                                # unset: local development
 
+    address = (request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+               or (request.client.host if request.client else None))
+    who = caller_id(address, secret)
+
     header = request.headers.get("authorization", "")
     token = header[7:] if header.lower().startswith("bearer ") else ""
     try:
-        verify(token, secret)
+        verify(token, secret, who=who)
     except TokenError as e:
         log.warning("rejected token: %s", e)
         raise HTTPException(status_code=401, detail="not authorised")
 
     if limiter is None:
         return
-    who = (request.headers.get("x-forwarded-for", "").split(",")[0].strip()
-           or (request.client.host if request.client else "unknown"))
     if not limiter.allow(who):
         raise HTTPException(status_code=429, detail="too many requests")
 
@@ -172,7 +204,7 @@ def make_app(submit_fn: SubmitFn | Callable[..., str],
         # container on arbitrary bytes is expensive; reading the first twelve
         # of them is not.
         suffix = sniff_container(data)
-        if suffix is None:
+        if suffix is None or not decodes_to_a_frame(data, suffix):
             raise Rejected("That file does not look like a video we can read. "
                            "Record with your phone's own camera app.")
         return data, suffix
@@ -202,7 +234,7 @@ def make_app(submit_fn: SubmitFn | Callable[..., str],
         try:
             clip, suffix = _read(video)
             job_id = submit_fn(clip=clip, height_cm=_height(height_cm),
-                               session_id=sid, suffix=suffix)
+                               session_id=sid, suffix=suffix, debug=False)
             return JSONResponse({"status": "accepted", "job_id": job_id,
                                  "session_id": sid}, status_code=202)
         except Rejected as e:
@@ -253,7 +285,8 @@ def make_app(submit_fn: SubmitFn | Callable[..., str],
             return JSONResponse({
                 "status": "accepted",
                 "job_id": submit_fn(clip=clip, height_cm=_height(height_cm),
-                                    session_id="debug", suffix=suffix)},
+                                    session_id="debug", suffix=suffix,
+                                    debug=True)},
                 status_code=202)
         except Rejected as e:
             return JSONResponse({"error": str(e)}, status_code=400)
