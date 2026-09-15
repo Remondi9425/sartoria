@@ -18,8 +18,20 @@ import type { DigitalTwin } from "@/lib/engine/types";
 const TIER_NOTE: Record<string, string> = {
   A: "The waist, seat and leg lengths came out the same in every frame.",
   B: "Consistent across this video, with a couple of the smaller numbers softer.",
-  C: "The frames disagreed enough that we would rather you checked the waist.",
+  C: "The frames disagreed enough that we would rather you checked one of "
+     + "these yourself.",
 };
+
+/** Which measurements the frames actually disagreed on.
+ *
+ *  Tier C used to send everyone to check their waist, whichever number was
+ *  the soft one — so a reader whose waist was fine learned nothing and
+ *  trusted the tier a little less. */
+function shaky(twin: DigitalTwin): string[] {
+  return Object.entries(twin.measurement_confidence)
+    .filter(([, c]) => c === "low")
+    .map(([site]) => site);
+}
 
 export function Measurements({
   twin, seconds, onNext,
@@ -53,8 +65,14 @@ export function Measurements({
             <span className="font-semibold text-ink">
               Consistency {twin.data_quality_tier}.
             </span>{" "}
-            {TIER_NOTE[twin.data_quality_tier]} How close that is to a tape
-            measure is still being established.
+            {TIER_NOTE[twin.data_quality_tier]}{" "}
+            {twin.data_quality_tier === "C" && shaky(twin).length > 0 && (
+              <span className="text-ink">
+                Softest here: {shaky(twin).join(", ")}.{" "}
+              </span>
+            )}
+            How close any of this is to a tape measure is still being
+            established.
           </p>
         </div>
 

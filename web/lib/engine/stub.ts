@@ -70,11 +70,15 @@ function twinFor(heightCm: number, unsure: boolean): DigitalTwin {
 
 const sleep = (ms: number, signal?: AbortSignal) =>
   new Promise<void>((resolve, reject) => {
-    const t = setTimeout(resolve, ms);
-    signal?.addEventListener("abort", () => {
-      clearTimeout(t);
+    const onAbort = () => {
+      clearTimeout(timer);
       reject(new DOMException("aborted", "AbortError"));
-    }, { once: true });
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener("abort", onAbort, { once: true });
   });
 
 export function createStubEngine(scenario: Scenario = "ok"): MeasurementEngine {

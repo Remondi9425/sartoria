@@ -76,9 +76,16 @@ export function Product({
               </div>
               {fit.length_confidence === "low" && (
                 <p className="pt-3 text-[11.5px] leading-[1.5] text-amber">
-                  The size is solid, the leg length is not — we could not read
-                  your inseam well enough from that video to tell you whether
-                  these need turning up. Try them on before you cut anything.
+                  We could not read your inseam well enough from that video to
+                  say whether these need turning up. Try them on before you cut
+                  anything.
+                </p>
+              )}
+              {fit.confidence === "medium" && (
+                <p className="pt-2 text-[11.5px] leading-[1.5] text-white/60">
+                  Your waist came out a little differently across the video, so
+                  treat this as the likelier of two sizes rather than a
+                  certainty.
                 </p>
               )}
             </>

@@ -7,7 +7,7 @@
  * phrase the explanation; it never picks the number.
  */
 import type {
-  AreaNote, Confidence, DigitalTwin, FitRecommendation,
+  AreaNote, DigitalTwin, FitRecommendation,
   MeasurementSite, Product, SizeChart, SizeRow,
 } from "./types";
 
@@ -43,21 +43,16 @@ function verdictFor(p: number): AreaNote["verdict"] {
   return "good";
 }
 
-function weakest(...c: Confidence[]): Confidence {
-  if (c.includes("low")) return "low";
-  if (c.includes("medium")) return "medium";
-  return "high";
-}
-
 export const sizeCalculator = {
   recommend(twin: DigitalTwin, product: Product): FitRecommendation {
     const used: MeasurementSite[] = ["waist", "hip", "inseam"];
     const m = twin.measurements_cm;
-    // Two answers, two confidences. The size comes from the waist and seat;
-    // the hem comes from the inseam alone. Folding them into one number meant
-    // a shaky inseam could be reported with the size's authority.
-    const conf = weakest(twin.measurement_confidence.waist,
-                         twin.measurement_confidence.hip);
+    // Each confidence describes the measurement its own answer was computed
+    // from, and nothing else. The size is chosen by the waist alone — the seat
+    // only colours how it will sit — so mixing the seat's confidence in meant
+    // a poorly-read hip could mark a size low that had never depended on it.
+    const conf = twin.measurement_confidence.waist;
+    const seatConf = twin.measurement_confidence.hip;
     const lengthConf = twin.measurement_confidence.inseam;
 
     const rows = product.chart.rows.map((r) => toBodyRange(r, product.chart));
@@ -101,13 +96,17 @@ export const sizeCalculator = {
 
     const areas: AreaNote[] = [
       { area: "waist", verdict: verdictFor(pWaist), detail: "" },
-      { area: "hip", verdict: verdictFor(pHip), detail: "" },
     ];
+    // A seat we could not read well is not a seat verdict. Saying "hip roomy"
+    // from a low-confidence hip states as fact something we did not measure.
+    if (seatConf !== "low") {
+      areas.push({ area: "hip", verdict: verdictFor(pHip), detail: "" });
+    }
 
     // No chart publishes a thigh range, so it is only mentioned when the cut is
     // narrow and the seat is already near the top of its range.
     const narrow = product.fit === "slim" || product.fit === "tapered";
-    if (narrow && pHip >= THIGH_HINT_BAND) {
+    if (narrow && seatConf !== "low" && pHip >= THIGH_HINT_BAND) {
       areas.push({ area: "thigh", verdict: "snug", detail: "" });
     }
 
@@ -132,7 +131,8 @@ export const sizeCalculator = {
     // The headline is about how it sits, so only the waist and the seat feed
     // it. A hem is a length to be turned up, not a fit problem, and letting it
     // drive the sentence made every pair read "with a little room".
-    const vWaist = verdictFor(pWaist), vHip = verdictFor(pHip);
+    const vWaist = verdictFor(pWaist);
+    const vHip = seatConf === "low" ? "good" : verdictFor(pHip);
     const headline =
       vWaist === "snug" ? "Right size, on the snug side"
       : vWaist === "roomy" ? "Right size, with a little room"

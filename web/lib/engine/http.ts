@@ -25,13 +25,19 @@ const POLL_MS = 2_000;
 const MAX_POLLS = 150;          // five minutes, well past a cold start
 const MAX_CONSECUTIVE_FAILURES = 5;
 
+/** Cleans up after itself: polling calls this 150 times against one signal,
+ *  and a listener per call is a listener per call. */
 const sleep = (ms: number, signal?: AbortSignal) =>
   new Promise<void>((resolve, reject) => {
-    const t = setTimeout(resolve, ms);
-    signal?.addEventListener("abort", () => {
-      clearTimeout(t);
+    const onAbort = () => {
+      clearTimeout(timer);
       reject(new DOMException("aborted", "AbortError"));
-    }, { once: true });
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener("abort", onAbort, { once: true });
   });
 
 const UNKNOWN_QUALITY: CaptureQuality = {
@@ -76,7 +82,11 @@ async function engineTicket(signal?: AbortSignal): Promise<Ticket> {
   let res: Response;
   try {
     res = await fetch("/api/engine-token", { method: "POST", signal });
-  } catch {
+  } catch (e) {
+    // An abort is the caller changing their mind, not a service being down.
+    // Swallowing it told someone who had just started a second scan that the
+    // app was unreachable.
+    if ((e as Error)?.name === "AbortError") throw e;
     return { kind: "refused", message:
       "We could not reach this app's own server to start a scan." };
   }
@@ -181,10 +191,18 @@ export function createHttpEngine(baseUrl: string): MeasurementEngine {
             }
             continue;
           }
-          consecutiveFailures = 0;
-
+          // Reset only once something readable has arrived. Resetting on the
+          // status code alone meant a 200 carrying malformed JSON counted as
+          // progress, and the loop would sit there for the full five minutes.
           const body = await res.json().catch(() => null);
-          if (body === null) continue;
+          if (body === null || typeof body !== "object") {
+            if (++consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+              return rejected("The measuring service is answering with "
+                              + "something we cannot read. Please try again.");
+            }
+            continue;
+          }
+          consecutiveFailures = 0;
           if (body.status === "working") continue;
 
           onProgress?.({ fraction: 1, hint: "Done" });
