@@ -70,6 +70,14 @@ function twinFor(heightCm: number, unsure: boolean): DigitalTwin {
 
 const sleep = (ms: number, signal?: AbortSignal) =>
   new Promise<void>((resolve, reject) => {
+    // Checked before listening. An "abort" event that has already fired will
+    // not fire again, so a cancellation that happened while we were somewhere
+    // else — inside a fetch, between two steps — went unnoticed and the loop
+    // carried on to its own timeout.
+    if (signal?.aborted) {
+      reject(new DOMException("aborted", "AbortError"));
+      return;
+    }
     const onAbort = () => {
       clearTimeout(timer);
       reject(new DOMException("aborted", "AbortError"));

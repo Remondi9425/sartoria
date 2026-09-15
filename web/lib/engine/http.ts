@@ -29,6 +29,14 @@ const MAX_CONSECUTIVE_FAILURES = 5;
  *  and a listener per call is a listener per call. */
 const sleep = (ms: number, signal?: AbortSignal) =>
   new Promise<void>((resolve, reject) => {
+    // Checked before listening. An "abort" event that has already fired will
+    // not fire again, so a cancellation that happened while we were somewhere
+    // else — inside a fetch, between two steps — went unnoticed and the loop
+    // carried on to its own timeout.
+    if (signal?.aborted) {
+      reject(new DOMException("aborted", "AbortError"));
+      return;
+    }
     const onAbort = () => {
       clearTimeout(timer);
       reject(new DOMException("aborted", "AbortError"));
@@ -107,7 +115,17 @@ async function engineTicket(signal?: AbortSignal): Promise<Ticket> {
 }
 
 
-export function createHttpEngine(baseUrl: string): MeasurementEngine {
+/** Timing, injectable so the retry behaviour can be tested in milliseconds
+ *  rather than in the minutes it takes in real life. */
+export interface HttpEngineOptions {
+  pollMs?: number;
+  maxPolls?: number;
+}
+
+export function createHttpEngine(baseUrl: string,
+                                 opts: HttpEngineOptions = {}): MeasurementEngine {
+  const pollMs = opts.pollMs ?? POLL_MS;
+  const maxPolls = opts.maxPolls ?? MAX_POLLS;
   return {
     name: `http:${baseUrl}`,
     isStub: false,
@@ -168,8 +186,8 @@ export function createHttpEngine(baseUrl: string): MeasurementEngine {
         // twenty seconds. The bar reflects elapsed time honestly and stops
         // short of the end, because we are not told how far along it is.
         let consecutiveFailures = 0;
-        for (let i = 0; i < MAX_POLLS; i++) {
-          await sleep(POLL_MS, signal);
+        for (let i = 0; i < maxPolls; i++) {
+          await sleep(pollMs, signal);
           tick(Math.min(0.94, 0.05 + (Date.now() - began) / 150_000));
 
           const res = await fetch(`${baseUrl}/result/${ticket.job_id}`,
