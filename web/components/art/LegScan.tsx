@@ -32,8 +32,10 @@ const WARM = [222, 138, 132];
 /** Wide enough that neighbouring points overlap, which is what closes the
  *  cloud into a surface. Too small and the body falls back into a swarm. */
 const SKIN_RADIUS = 6.6;
-/** The measured points, over the skin, where it faces us. */
+/** The measured points, over the skin, where it faces us. Small: they are
+ *  meant to show that this was measured, not to be the picture. */
 const MESH_INK = [120, 52, 54];
+const MESH_DOT = 0.9;
 
 export function LegScan({
   points, className = "",
@@ -88,18 +90,23 @@ export function LegScan({
       // Pass one — the outline. Wider discs in one mid tone, whose only job is
       // to close the silhouette. Shading them individually left the edge
       // scalloped, because at the boundary each disc is its own little circle.
-      ctx.fillStyle = `rgb(${WARM.map((c) => Math.round(c * 0.72)).join(",")})`;
+      ctx.fillStyle = `rgb(${WARM.map((c) => Math.round(c * 0.70)).join(",")})`;
       for (const [px, py] of projected) {
         ctx.beginPath();
         ctx.arc(px, py, SKIN_RADIUS * 1.22, 0, Math.PI * 2);
         ctx.fill();
       }
 
-      // Pass two — the modelling, inside that outline, so the form has a near
-      // side and a far one.
+      // Pass two — the modelling, inside that outline.
+      //
+      // Flat circles, and a narrow range of shades. Pre-shaded soft sprites
+      // were tried and were worse: quantising depth into steps made
+      // neighbouring discs visibly different, and the leg turned patchy. What
+      // makes a union of circles read as a surface is adjacent ones being
+      // nearly the same colour, not their edges being soft.
       for (const [px, py, depth] of projected) {
         const near = (depth / (spread || 1) + 1) / 2;
-        const shade = 0.62 + near * 0.38;
+        const shade = 0.69 + near * 0.31;
         ctx.fillStyle = `rgb(${WARM.map((c) => Math.round(c * shade)).join(",")})`;
         ctx.beginPath();
         ctx.arc(px, py, SKIN_RADIUS, 0, Math.PI * 2);
@@ -110,8 +117,8 @@ export function LegScan({
       for (const [px, py, depth] of projected) {
         const near = (depth / (spread || 1) + 1) / 2;
         if (near < 0.58) continue;
-        ctx.fillStyle = `rgba(${MESH_INK.join(",")}, ${(near - 0.58) * 0.78})`;
-        ctx.fillRect(px - 0.7, py - 0.7, 1.4, 1.4);
+        ctx.fillStyle = `rgba(${MESH_INK.join(",")}, ${(near - 0.58) * 0.62})`;
+        ctx.fillRect(px - MESH_DOT / 2, py - MESH_DOT / 2, MESH_DOT, MESH_DOT);
       }
 
       frame = requestAnimationFrame(draw);

@@ -283,9 +283,14 @@ def measure_one(fm: FrameMesh) -> dict[str, float] | None:
     }
 
 
-# How many surface points to send back. A leg reads as a solid form well
-# before this; past it the payload grows and the picture does not.
-CLOUD_POINTS = 2600
+# How many surface points to send back.
+#
+# Every leg vertex, in practice: the cap is above what the region holds. With
+# fewer, the discs that close the cloud into a surface have to be wide enough
+# to bridge the gaps, and a body built from wide discs looks like it is built
+# from discs. Denser points mean smaller ones. Around 4000 costs 80 KB, which
+# is less than one of the photographs on the product screen.
+CLOUD_POINTS = 6000
 
 
 def leg_cloud(fm: FrameMesh, y_waist: float) -> list[list[float]] | None:
@@ -306,8 +311,12 @@ def leg_cloud(fm: FrameMesh, y_waist: float) -> list[list[float]] | None:
     if len(keep) < 200:
         return None
 
-    if len(keep) > CLOUD_POINTS:               # deterministic, not sampled
-        keep = keep[:: max(1, len(keep) // CLOUD_POINTS)][:CLOUD_POINTS]
+    if len(keep) > CLOUD_POINTS:
+        # Shuffled, not strided. The mesh is ordered in rings, so taking every
+        # Nth vertex drops whole rings and the render came out in horizontal
+        # bands. Seeded, so the same clip gives the same body twice.
+        idx = np.random.default_rng(0).permutation(len(keep))[:CLOUD_POINTS]
+        keep = keep[np.sort(idx)]
 
     # Centred on the hips and standing on zero, so the browser receives
     # something it can draw without knowing anything about our frame.
