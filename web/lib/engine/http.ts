@@ -163,9 +163,16 @@ export function createHttpEngine(baseUrl: string,
           method: "POST", body: form, headers: auth, signal,
         });
         if (submit.status === 401) {
-          return rejected(
-            "The app is not authorised to reach the measurement engine. Its " +
-            "shared secret is missing or out of date.");
+          // Two very different causes used to give one message, so neither
+          // could be told from the other: no secret configured here, or a
+          // secret the engine disagrees with.
+          return rejected(ticket_.kind === "open"
+            ? "This app has no shared secret configured, so it sent no token "
+              + "— and the engine requires one. Set SARTORIA_TOKEN_SECRET "
+              + "where the app is deployed, then redeploy."
+            : "The engine rejected this app's token. The two are configured "
+              + "with different secrets, or the token did not survive the "
+              + "trip.");
         }
         if (submit.status === 429) {
           return rejected(
