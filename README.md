@@ -70,6 +70,11 @@ when the container starts rather than inside the first scan; and for a demo,
 container warm at all times, billed while idle. The video decoder only decodes
 the frames it keeps, which was most of the warm time before the model ran.
 
+After those changes, same clip: **10 s** warm (6.7 s of it in the engine) and
+**110 s** cold. The container's own log says where the cold time goes: the
+weights load in 5.5 s and the two warm-up passes take 79 s, which is
+TorchScript optimising a ViT-L. That is the next thing to attack.
+
 After a redeploy, containers warm from the previous version keep serving for a
 minute or so. If a change seems not to have landed, that is usually why.
 
