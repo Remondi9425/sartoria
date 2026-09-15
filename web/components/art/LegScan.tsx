@@ -16,6 +16,19 @@ import { useEffect, useRef } from "react";
  * and a painter's-algorithm sort do not need a renderer, and the app stays
  * free of a dependency it would use in one place.
  */
+/**
+ * A warm material, not a skin colour.
+ *
+ * "Flesh tone" is a choice that fits one set of people and quietly excludes
+ * everyone else, and this app has no idea who is looking at it. So the legs
+ * are rendered in something that reads as a body without claiming to be
+ * anybody's skin — closer to clay than to a photograph.
+ */
+const WARM = [214, 122, 118];
+const DOT_RADIUS = 6.0;
+const SPRITE_PX = 48;
+
+
 export function LegScan({
   points, className = "",
 }: { points: [number, number, number][]; className?: string }) {
@@ -37,6 +50,18 @@ export function LegScan({
       spread = Math.max(spread, Math.abs(x), Math.abs(z));
     }
     const midY = (minY + maxY) / 2;
+
+    // One soft disc, drawn once and stamped thousands of times.
+    const sprite = document.createElement("canvas");
+    sprite.width = sprite.height = SPRITE_PX;
+    const sctx = sprite.getContext("2d")!;
+    const g = sctx.createRadialGradient(
+      SPRITE_PX / 2, SPRITE_PX / 2, 0, SPRITE_PX / 2, SPRITE_PX / 2, SPRITE_PX / 2);
+    g.addColorStop(0, `rgba(${WARM.join(",")}, 0.95)`);
+    g.addColorStop(0.45, `rgba(${WARM.join(",")}, 0.45)`);
+    g.addColorStop(1, `rgba(${WARM.join(",")}, 0)`);
+    sctx.fillStyle = g;
+    sctx.fillRect(0, 0, SPRITE_PX, SPRITE_PX);
 
     const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     let frame = 0;
@@ -66,13 +91,21 @@ export function LegScan({
       });
       projected.sort((a, b) => a[2] - b[2]);
 
+      // Soft overlapping discs rather than pixels: where the surface is dense
+      // they build into a solid form, and where it curves away they thin out.
+      // That build-up is the whole illusion, so blending is additive-ish and
+      // the sprite is drawn rather than painted per point — a gradient per
+      // point per frame is eighteen hundred gradients sixty times a second.
+      // Plain over-painting on a light ground: overlapping discs accumulate
+      // toward opaque where the surface is dense, which is the solidity we
+      // want. Multiply looked right in theory and muddy in practice.
       for (const [px, py, depth] of projected) {
-        // Nearer points are brighter and slightly larger — the only depth cue
-        // a cloud has once it has no surface to catch light.
         const near = (depth / (spread || 1) + 1) / 2;
-        ctx.fillStyle = `rgba(34, 58, 94, ${0.16 + near * 0.62})`;
-        ctx.fillRect(px, py, 1 + near * 1.4, 1 + near * 1.4);
+        const r = DOT_RADIUS * (0.62 + near * 0.48);
+        ctx.globalAlpha = 0.045 + near * 0.26;
+        ctx.drawImage(sprite, px - r, py - r, r * 2, r * 2);
       }
+      ctx.globalAlpha = 1;
       frame = requestAnimationFrame(draw);
     };
 

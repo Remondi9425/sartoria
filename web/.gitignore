@@ -42,3 +42,6 @@ next-env.d.ts
 
 # local test fixture, not part of the app
 public/_test_clip.mov
+
+# local fixtures for the renderer bench at /scan-preview
+public/_test_cloud.json
