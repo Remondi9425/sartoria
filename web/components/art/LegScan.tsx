@@ -3,40 +3,19 @@
 import { useEffect, useRef } from "react";
 
 /**
- * The customer's own legs, from the surface points the body model produced.
- * Turns by itself, and follows a finger.
+ * The customer's own legs, drawn from the surface points the body model
+ * produced. Turns by itself, and follows a finger.
  *
- * Drawn in two passes, because recolouring the points is not a surface. The
- * first closes the cloud into a body; the second puts the measured points back
- * on top of it, where they face us. Keeping them visible is deliberate: this
- * is a body we worked out from a video, and a smooth shell on its own would
- * claim a precision the measurement does not have.
+ * A point cloud rather than a surface: the triangles that would join these
+ * points belong to the SMPL model files, whose licence this project
+ * deliberately avoided needing. At this density a leg reads as a limb anyway,
+ * and it reads honestly — a scan looks like a scan, where a smooth surface
+ * would imply a precision the measurement does not have.
  *
- * A cloud rather than a mesh at all because the triangles that would join
- * these points belong to the SMPL model files, whose licence this project
- * deliberately avoided needing.
- *
- * Canvas rather than a 3-D library: a rotation matrix and a back-to-front sort
- * do not need a renderer, and the app stays free of a dependency it would use
- * in one place.
+ * Canvas rather than a 3-D library: two thousand points, one rotation matrix
+ * and a painter's-algorithm sort do not need a renderer, and the app stays
+ * free of a dependency it would use in one place.
  */
-
-/**
- * A warm material, not a skin colour.
- *
- * "Flesh tone" fits one set of people and quietly excludes everyone else, and
- * this app has no idea who is looking at it. Closer to clay than to a
- * photograph: it reads as a body without claiming to be anybody's skin.
- */
-const WARM = [222, 138, 132];
-/** Wide enough that neighbouring points overlap, which is what closes the
- *  cloud into a surface. Too small and the body falls back into a swarm. */
-const SKIN_RADIUS = 6.6;
-/** The measured points, over the skin, where it faces us. Small: they are
- *  meant to show that this was measured, not to be the picture. */
-const MESH_INK = [120, 52, 54];
-const MESH_DOT = 0.9;
-
 export function LegScan({
   points, className = "",
 }: { points: [number, number, number][]; className?: string }) {
@@ -50,7 +29,7 @@ export function LegScan({
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    // Fit the body once; it does not change while it turns.
+    // Fit the body to the canvas once; it does not change while it turns.
     let minY = Infinity, maxY = -Infinity, spread = 0;
     for (const [x, y, z] of points) {
       if (y < minY) minY = y;
@@ -87,40 +66,13 @@ export function LegScan({
       });
       projected.sort((a, b) => a[2] - b[2]);
 
-      // Pass one — the outline. Wider discs in one mid tone, whose only job is
-      // to close the silhouette. Shading them individually left the edge
-      // scalloped, because at the boundary each disc is its own little circle.
-      ctx.fillStyle = `rgb(${WARM.map((c) => Math.round(c * 0.70)).join(",")})`;
-      for (const [px, py] of projected) {
-        ctx.beginPath();
-        ctx.arc(px, py, SKIN_RADIUS * 1.22, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      // Pass two — the modelling, inside that outline.
-      //
-      // Flat circles, and a narrow range of shades. Pre-shaded soft sprites
-      // were tried and were worse: quantising depth into steps made
-      // neighbouring discs visibly different, and the leg turned patchy. What
-      // makes a union of circles read as a surface is adjacent ones being
-      // nearly the same colour, not their edges being soft.
       for (const [px, py, depth] of projected) {
+        // Nearer points are brighter and slightly larger — the only depth cue
+        // a cloud has once it has no surface to catch light.
         const near = (depth / (spread || 1) + 1) / 2;
-        const shade = 0.69 + near * 0.31;
-        ctx.fillStyle = `rgb(${WARM.map((c) => Math.round(c * shade)).join(",")})`;
-        ctx.beginPath();
-        ctx.arc(px, py, SKIN_RADIUS, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.fillStyle = `rgba(34, 58, 94, ${0.16 + near * 0.62})`;
+        ctx.fillRect(px, py, 1 + near * 1.4, 1 + near * 1.4);
       }
-
-      // Pass three — the scan itself, fading out as the surface turns away.
-      for (const [px, py, depth] of projected) {
-        const near = (depth / (spread || 1) + 1) / 2;
-        if (near < 0.58) continue;
-        ctx.fillStyle = `rgba(${MESH_INK.join(",")}, ${(near - 0.58) * 0.62})`;
-        ctx.fillRect(px - MESH_DOT / 2, py - MESH_DOT / 2, MESH_DOT, MESH_DOT);
-      }
-
       frame = requestAnimationFrame(draw);
     };
 
