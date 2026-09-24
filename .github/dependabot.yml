@@ -1,22 +1,53 @@
 version: 2
+# One pull request per ecosystem per week for minor and patch updates; each
+# major update still arrives on its own, because those need a real review.
+# Ignores are listed here, with the reason, so that anyone can see why a
+# version is being held back and remove the entry when it no longer applies.
 updates:
   - package-ecosystem: npm
     directory: /web
     schedule:
       interval: weekly
+    groups:
+      web-minor-and-patch:
+        update-types: [minor, patch]
     ignore:
       # Types follow the Node major in .nvmrc; bump both together by hand.
       - dependency-name: "@types/node"
         update-types: ["version-update:semver-major"]
+      # ESLint 10 breaks eslint-plugin-react (react/display-name); see #21.
+      - dependency-name: eslint
+        versions: [">=10"]
+      # typescript-eslint does not support TypeScript 7 yet; see #25.
+      - dependency-name: typescript
+        versions: [">=7"]
+
   - package-ecosystem: uv
     directory: /
     schedule:
       interval: weekly
+    # uv.lock is the source of truth. requirements-runtime.txt is generated
+    # from it (see CONTRIBUTING.md); Dependabot editing it directly produced
+    # pull requests that changed the export but not the lock.
+    exclude-paths:
+      - requirements-runtime.txt
+    groups:
+      python-minor-and-patch:
+        update-types: [minor, patch]
     ignore:
       # 6.x has no macOS x86_64 wheel; see the note in pyproject.toml.
       - dependency-name: cbor2
         versions: [">=6"]
+      # Pinned exactly by pydantic; it moves when pydantic does. See #28.
+      - dependency-name: pydantic-core
+      # modal requires protobuf<7; see #35.
+      - dependency-name: protobuf
+        versions: [">=7"]
+
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    groups:
+      actions-minor-and-patch:
+        update-types: [minor, patch]
