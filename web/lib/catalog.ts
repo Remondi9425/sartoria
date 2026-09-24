@@ -5,6 +5,10 @@
  * a real denim label's name, charts and prices in a demo would misrepresent a
  * real company, so the whole catalogue is fictional and says so.
  *
+ * Real brands appear in one place only: `brands.ts`, the published size
+ * charts used to read back a pair the customer already owns. Nothing is sold
+ * under their names.
+ *
  * The size charts are realistic in shape, not copied from anyone. When the
  * Catalog Ingestor is real it will replace this file wholesale.
  */

@@ -5,7 +5,6 @@ import { test } from "node:test";
 
 import { PRODUCTS, productById } from "../lib/catalog";
 import { sizeCalculator } from "../lib/engine/advisor";
-import { twinFromWardrobe } from "../lib/engine/wardrobe";
 import { referenceTwin } from "./fixtures";
 
 const marea = productById("marea-slim-tapered")!;
@@ -92,23 +91,6 @@ test("the reasoning names the measurements it used", () => {
   const fit = sizeCalculator.recommend(referenceTwin(), marea);
   assert.deepEqual(fit.used, ["waist", "hip", "inseam"]);
 });
-
-test("the wardrobe anchor recovers roughly the body that size is cut for", () => {
-  const twin = twinFromWardrobe(marea, "W31 L32", 174)!;
-  assert.ok(Math.abs(twin.measurements_cm.waist - 82) <= 2);
-  assert.equal(twin.data_quality_tier, "C");
-  assert.notEqual(twin.measurement_confidence.waist, "high",
-    "a range is not a body and must never be reported as high confidence");
-});
-
-test("the wardrobe anchor round-trips back to the size it came from", () => {
-  for (const row of marea.chart.rows) {
-    const twin = twinFromWardrobe(marea, row.label, 174)!;
-    // The anchor says "this size fits me"; the calculator must agree.
-    assert.equal(sizeCalculator.recommend(twin, marea).size, row.label);
-  }
-});
-
 
 // ── each confidence belongs to the answer it was computed from ──────────────
 test("a poorly-read seat does not lower the confidence of the size", () => {

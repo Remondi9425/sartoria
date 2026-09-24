@@ -16,7 +16,8 @@ import { Wardrobe } from "@/components/screens/Wardrobe";
 import { Welcome } from "@/components/screens/Welcome";
 import { calculator, getEngine, type Scenario } from "@/lib/engine";
 import { twinFromManual } from "@/lib/engine/manual";
-import { twinFromWardrobe } from "@/lib/engine/wardrobe";
+import { twinFromOwnedPair } from "@/lib/engine/wardrobe";
+import type { BrandChart } from "@/lib/brands";
 import type {
   CaptureProgress, CaptureRejected, DigitalTwin, Product,
 } from "@/lib/engine/types";
@@ -111,8 +112,8 @@ export default function App() {
   // Like typed numbers, a pair read back through its chart skips the
   // measurements screen: its timer and its consistency tier describe a video,
   // and there was none.
-  const anchor = useCallback((p: Product, size: string) => {
-    const t = twinFromWardrobe(p, size, height);
+  const anchor = useCallback((chart: BrandChart, w: number, l: number) => {
+    const t = twinFromOwnedPair(chart, w, l, height);
     if (!t) return;
     setTwin(t);
     setStep("preferences");

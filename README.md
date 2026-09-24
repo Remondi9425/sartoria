@@ -19,7 +19,8 @@ npm run dev
 ```
 
 Open http://localhost:3000. Leave `NEXT_PUBLIC_ENGINE_URL` unset to use the demo.
-The catalogue and size charts are fictional. The camera can be used by the flow;
+The catalogue and its size charts are fictional. The "a pair I own" path uses the
+published size charts of Levi's, Wrangler and Lee (`web/lib/brands.ts`). The camera can be used by the flow;
 with the stub selected, recordings are not sent to the measurement engine.
 
 ## Work on the Python engine
