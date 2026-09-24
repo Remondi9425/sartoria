@@ -6,45 +6,34 @@
  * body estimate, and it carries something the video never will: how they like
  * jeans to sit. Two identical pairs of legs want different jeans.
  *
- * Real logic, not a stub. The midpoint of the range a size is cut for is the
- * best single estimate of the body inside it.
+ * Real logic, not a stub. The charts in `../brands` list the body each size
+ * is cut for, so that body is the best single estimate of the person inside it.
  */
-import type {
-  Confidence, DigitalTwin, MeasurementSite, Product, SizeChart, SizeRow,
-} from "./types";
+import type { BrandChart } from "../brands";
+import type { Confidence, DigitalTwin, MeasurementSite } from "./types";
 
-function toBody(row: SizeRow, chart: SizeChart): SizeRow {
-  if (chart.kind === "body") return row;
-  return {
-    ...row,
-    waist_cm: [row.waist_cm[0] + chart.ease_cm.waist, row.waist_cm[1] + chart.ease_cm.waist],
-    hip_cm: [row.hip_cm[0] + chart.ease_cm.hip, row.hip_cm[1] + chart.ease_cm.hip],
-  };
-}
-
-const mid = ([a, b]: [number, number]) => Math.round(((a + b) / 2) * 10) / 10;
-
-export function twinFromWardrobe(
-  product: Product, sizeLabel: string, heightCm: number,
+export function twinFromOwnedPair(
+  chart: BrandChart, w: number, l: number, heightCm: number,
 ): DigitalTwin | null {
-  const raw = product.chart.rows.find((r) => r.label === sizeLabel);
-  if (!raw) return null;
-  const row = toBody(raw, product.chart);
+  const size = chart.sizes.find((s) => s.w === w);
+  const length = chart.lengths.find((x) => x.l === l);
+  if (!size || !length) return null;
 
-  const waist = mid(row.waist_cm);
-  const hip = mid(row.hip_cm);
-  // The rest is inferred from stature, which is weak — and labelled as weak.
+  const { waist_cm: waist, hip_cm: hip } = size;
+  // The rest is inferred from seat and stature, which is weak — and labelled
+  // as weak. The thigh is the exception when the brand publishes one.
   const k = heightCm / 174;
   const r = (n: number) => Math.round(n * 10) / 10;
 
   const measurements: Record<MeasurementSite, number> = {
     waist, hip,
-    thigh: r(hip * 0.575), knee: r(hip * 0.395),
+    thigh: size.thigh_cm ?? r(hip * 0.575), knee: r(hip * 0.395),
     calf: r(hip * 0.385), ankle: r(hip * 0.232),
-    inseam: row.inseam_cm, outseam: r(107 * k), rise: r(26 * k),
+    inseam: length.inseam_cm, outseam: r(107 * k), rise: r(26 * k),
   };
 
-  const strong: Confidence = "medium";     // never "high": it is a range, not a body
+  const label = `${chart.brand} W${w} L${l}`;
+  const strong: Confidence = "medium";     // never "high": a size fits a range of bodies
   const weak: Confidence = "low";
   return {
     session_id: `wardrobe-${Date.now().toString(36)}`,
@@ -52,19 +41,21 @@ export function twinFromWardrobe(
     measurements_cm: measurements,
     measurement_confidence: {
       waist: strong, hip: strong, inseam: strong,
-      thigh: weak, knee: weak, calf: weak, ankle: weak,
-      outseam: weak, rise: weak,
+      thigh: size.thigh_cm === undefined ? weak : strong,
+      knee: weak, calf: weak, ankle: weak, outseam: weak, rise: weak,
     },
     measurement_notes: {
-      waist: `read back from ${product.brand} ${sizeLabel}, which you said fits`,
-      thigh: "inferred from your seat, not measured",
+      waist: `read back from ${label}, which you said fits`,
+      thigh: size.thigh_cm === undefined
+        ? "inferred from your seat, not measured"
+        : `from ${chart.brand}'s chart for W${w}`,
     },
     capture_quality: {
       head_visible: null, feet_visible: null, body_in_frame: null,
       usable_frames: 0, rotation_coverage: 0,
       frontal_yaw_deg: null, profile_yaw_deg: null,
     },
-    processing_method: "wardrobe_anchor_v1",
+    processing_method: "wardrobe_anchor_v2",
     data_quality_tier: "C",
     created_at: new Date().toISOString(),
   };
