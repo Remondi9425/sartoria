@@ -59,7 +59,7 @@ numpy==1.26.4
     #   sartoria-spike
 opencv-python-headless==4.11.0.86
     # via sartoria-spike
-propcache==0.5.2
+propcache==0.5.4
     # via
     #   aiohttp
     #   yarl
