@@ -36,7 +36,10 @@ uv sync --locked
 ```
 
 Commit both the lock and exported runtime requirements. The Modal image consumes
-the export; CI checks it against the lock. For frontend changes, use npm and commit
+the export; CI checks it against the lock. Dependabot updates only `uv.lock`, so
+its Python pull requests fail that check until someone checks out the branch,
+runs the `uv export` line above and pushes the result. Check that the pull
+request then changes both files before it is merged. For frontend changes, use npm and commit
 `web/package-lock.json`. Discuss large model/runtime changes before implementing them.
 
 Describe the problem, resulting behaviour, tests and relevant limitations in PRs.
