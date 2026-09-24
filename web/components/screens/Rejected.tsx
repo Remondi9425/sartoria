@@ -1,6 +1,6 @@
 "use client";
 
-import { Body, Button, Eyebrow, Footer, Note, Screen, Title } from "@/components/ui";
+import { Body, Button, CornerLogo, Eyebrow, Footer, Note, Screen, Title } from "@/components/ui";
 import type { CaptureRejected } from "@/lib/engine/types";
 
 /** The refusal is a first-class screen, not an alert. It names one cause and
@@ -10,11 +10,12 @@ export function Rejected({
 }: { result: CaptureRejected; onRetry: () => void; onWardrobe: () => void }) {
   return (
     <Screen>
+      <CornerLogo />
       <Body>
         <Eyebrow>We stopped — here is why</Eyebrow>
-        <Title>That one won&rsquo;t work.</Title>
+        <Title>That one <em>won&rsquo;t work.</em></Title>
 
-        <div className="mt-6 rounded-2xl border-l-[3px] border-rust bg-paper px-5 py-4">
+        <div className="mt-6 rounded-2xl border-l-[3px] border-rust bg-surface px-5 py-4">
           <p className="text-[14px] leading-[1.55]">{result.reason}</p>
         </div>
 
@@ -25,14 +26,14 @@ export function Rejected({
             ["Whole body in frame", result.capture_quality.body_in_frame],
           ].map(([label, ok]) => (
             <div key={String(label)} className="flex justify-between border-b
-                                                border-line-soft pb-2.5">
+                                                border-chalk/10 pb-2.5">
               <dt className="text-mute">{label as string}</dt>
-              <dd className={ok ? "text-ink" : "font-semibold text-rust"}>
+              <dd className={ok ? "text-chalk" : "font-semibold text-rust"}>
                 {ok === null ? "—" : ok ? "yes" : "no"}
               </dd>
             </div>
           ))}
-          <div className="flex justify-between border-b border-line-soft pb-2.5">
+          <div className="flex justify-between border-b border-chalk/10 pb-2.5">
             <dt className="text-mute">Turn covered</dt>
             <dd className="figure">
               {Math.round(result.capture_quality.rotation_coverage * 100)}%
@@ -52,7 +53,7 @@ export function Rejected({
         <Button onClick={onRetry}>Film again</Button>
         <div className="pt-2.5 text-center">
           <button type="button" onClick={onWardrobe}
-                  className="text-[12.5px] text-navy underline underline-offset-4 hover:text-rust">
+                  className="text-[12.5px] text-chalk underline underline-offset-4 hover:text-amber">
             Or tell us a pair you already own
           </button>
         </div>

@@ -1,12 +1,13 @@
 "use client";
 
-import type { ReactNode } from "react";
+import type { ReactNode, Ref } from "react";
 
 export function Screen({
   children, dark = false, className = "",
 }: { children: ReactNode; dark?: boolean; className?: string }) {
   return (
-    <div className={`flex h-full flex-col ${dark ? "bg-navy-deep text-white" : "bg-card"} ${className}`}>
+    <div className={`relative flex h-full flex-col text-chalk
+                     ${dark ? "bg-ground-deep" : "bg-ground"} ${className}`}>
       {children}
     </div>
   );
@@ -27,12 +28,12 @@ export function Button({
   variant?: "primary" | "outline" | "ghost"; disabled?: boolean;
 }) {
   const base =
-    "w-full rounded-full py-4 text-[15px] font-semibold transition " +
-    "disabled:cursor-not-allowed disabled:opacity-40";
+    "w-full rounded-full transition disabled:cursor-not-allowed disabled:opacity-40";
   const look = {
-    primary: "bg-navy text-white hover:bg-navy-soft active:scale-[.99]",
-    outline: "border border-navy bg-white text-navy hover:bg-paper active:scale-[.99]",
-    ghost: "text-navy underline underline-offset-4 hover:text-rust",
+    primary: "bg-chalk py-4 text-[15px] font-semibold text-ground hover:bg-white active:scale-[.99]",
+    outline: "border border-chalk/30 bg-transparent py-4 text-[15px] font-semibold text-chalk " +
+             "hover:border-chalk active:scale-[.99]",
+    ghost: "py-1 text-[12.5px] text-chalk underline underline-offset-4 hover:text-amber",
   }[variant];
   return (
     <button type="button" onClick={onClick} disabled={disabled}
@@ -42,13 +43,24 @@ export function Button({
   );
 }
 
-export function Eyebrow({ children }: { children: ReactNode }) {
-  return <p className="eyebrow pt-6 pb-3">{children}</p>;
+/** A quiet way back, above the eyebrow. */
+export function BackLink({ children, onClick }: { children: ReactNode; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick}
+            className="pt-[22px] text-[12.5px] text-mute hover:text-chalk">
+      {children}
+    </button>
+  );
 }
 
+export function Eyebrow({ children }: { children: ReactNode }) {
+  return <p className="eyebrow pt-6 pb-2.5">{children}</p>;
+}
+
+/** Serif, with the last phrase in an `<em>` so it lands in amber. */
 export function Title({ children }: { children: ReactNode }) {
   return (
-    <h1 className="text-[27px] leading-[1.18] font-bold tracking-[-.015em] text-ink">
+    <h1 className="font-serif text-[36px] leading-[1.02] font-normal text-chalk">
       {children}
     </h1>
   );
@@ -62,10 +74,131 @@ export function Note({ children }: { children: ReactNode }) {
  *  mistake this demo for a working measurement. */
 export function StubBadge() {
   return (
-    <div className="flex items-center gap-1.5 rounded-full bg-amber/15 px-2.5 py-1
-                    text-[9.5px] font-semibold tracking-[.12em] text-amber uppercase">
+    <div className="flex flex-none items-center gap-1.5 whitespace-nowrap rounded-full
+                    bg-amber/15 px-2.5 py-1 text-[9.5px] font-semibold tracking-[.12em]
+                    text-amber uppercase">
       <span className="h-1.5 w-1.5 rounded-full bg-amber" />
       demo · numbers not measured
+    </div>
+  );
+}
+
+/** The tailor, speaking: four amber bars. */
+export function SpeakingBars() {
+  return (
+    <div className="flex h-3.5 flex-none items-center gap-0.5" aria-hidden="true">
+      {[0, 1, 2, 3].map((i) => (
+        <span key={i}
+              className="speak block h-3.5 w-[2.5px] origin-center rounded-sm bg-amber"
+              style={{ ["--speak-d" as string]: `${0.7 + i * 0.13}s`,
+                       ["--speak-delay" as string]: `${i * 0.1}s` }} />
+      ))}
+    </div>
+  );
+}
+
+/** The tailor, thinking: three dots. */
+export function TypingDots() {
+  return (
+    <div className="flex h-2 items-center gap-[5px]" aria-label="The tailor is writing">
+      {[0, 1, 2].map((d) => (
+        <span key={d} className="typing-dot block h-1.5 w-1.5 rounded-full bg-mute"
+              style={{ ["--dot-delay" as string]: `${d * 0.15}s` }} />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * The wordmark: "sart", a sewn button for the "o", "ria".
+ *
+ * The button carries a ref because the needle transition starts from its
+ * centre — the needle is pulled out of it.
+ */
+export function Wordmark({
+  size = 30, buttonRef,
+}: { size?: number; buttonRef?: Ref<HTMLSpanElement> }) {
+  const d = Math.round(size * 0.46);
+  const hole = Math.max(2, Math.round(d * 0.2));
+  const at = [Math.round(d * 0.25), Math.round(d * 0.55)];
+  const cross = size >= 48;
+  const bar = Math.round(14 * size / 64);
+  return (
+    <p className="m-0 whitespace-nowrap font-serif font-normal text-chalk"
+       style={{ fontSize: size, lineHeight: 1 }} aria-label="SartorIA">
+      <span aria-hidden="true">sart</span>
+      <span ref={buttonRef} aria-hidden="true"
+            className="relative inline-block rounded-full bg-amber"
+            style={{ width: d, height: d, margin: "0 1px", verticalAlign: 0 }}>
+        {at.flatMap((top) => at.map((left) => (
+          <span key={`${left}-${top}`} className="absolute rounded-full bg-ground"
+                style={{ left, top, width: hole, height: hole }} />
+        )))}
+        {cross && [45, -45].map((r) => (
+          <span key={r} className="absolute bg-chalk"
+                style={{ left: "50%", top: "50%", width: bar, height: 2,
+                         transform: `translate(-50%,-50%) rotate(${r}deg)` }} />
+        ))}
+      </span>
+      <span aria-hidden="true">ria</span>
+    </p>
+  );
+}
+
+/** The needle, as drawn in the icon and flown in the transition. */
+export function Needle({ length, plain = false, style }: {
+  length: number; plain?: boolean; style?: React.CSSProperties;
+}) {
+  return (
+    <span className="absolute block bg-amber"
+          style={{
+            width: plain ? 2 : 3, height: length,
+            clipPath: plain ? undefined : "polygon(0 0,100% 0,100% 88%,50% 100%,0 88%)",
+            ...style,
+          }}>
+      {!plain && (
+        <span className="absolute bg-ground-deep"
+              style={{ left: 1, top: 3, width: 1, height: 5 }} />
+      )}
+    </span>
+  );
+}
+
+/**
+ * The icon: an italic S crossed by a needle, on a dark tile. Shown wherever
+ * the wordmark is not.
+ */
+export function Logo({ size = 34, needle = true }: { size?: number; needle?: boolean }) {
+  const L = Math.round(size * 0.92);
+  const plain = size <= 24;
+  return (
+    <div className="relative flex-none overflow-hidden bg-ground-deep"
+         style={{ width: size, height: size, borderRadius: Math.round(size / 4),
+                  outline: "1px solid rgba(240,231,217,.12)" }}
+         role="img" aria-label="SartorIA">
+      <span className="absolute inset-0 grid place-content-center">
+        <span className="font-serif italic text-chalk"
+              style={{ fontSize: Math.round(size * 0.88), lineHeight: 1,
+                       transform: "translateY(-1px)" }}>
+          S
+        </span>
+      </span>
+      {needle && (
+        <Needle length={L} plain={plain}
+                style={{ left: "50%", top: "50%",
+                         transform: "translate(-50%,-50%) rotate(32deg)" }} />
+      )}
+    </div>
+  );
+}
+
+/** The logo in its corner, on every screen after Welcome. Hidden while the
+ *  needle is still flying into that corner. */
+export function CornerLogo({ hidden = false }: { hidden?: boolean }) {
+  if (hidden) return null;
+  return (
+    <div className="absolute right-6 top-6 z-10">
+      <Logo size={34} />
     </div>
   );
 }
@@ -91,7 +224,7 @@ export function PrivacyNote({ detail }: { detail?: boolean }) {
   return (
     <details className="group pt-3" open={detail}>
       <summary className="cursor-pointer list-none text-[11.5px] leading-[1.5] text-faint
-                          hover:text-navy">
+                          hover:text-chalk">
         Your video is measured and discarded. We never store it.
         <span className="pl-1 underline underline-offset-2 group-open:hidden">
           What that means

@@ -13,8 +13,8 @@ export default function Preview() {
   }, []);
   if (!pts) return <p style={{ padding: 24 }}>no fixture</p>;
   return (
-    <main className="min-h-dvh bg-paper p-6">
-      <div className="mx-auto max-w-sm rounded-2xl bg-card p-4">
+    <main className="min-h-dvh bg-surface p-6">
+      <div className="mx-auto max-w-sm rounded-2xl bg-ground p-4">
         <LegScan points={pts} className="h-[420px] w-full" />
       </div>
       <p className="pt-3 text-center text-[12px] text-mute">

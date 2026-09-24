@@ -41,7 +41,14 @@ shared quotas and a validated proxy/IP trust configuration.
 
 ## Other flows
 
-Preferences are held in browser memory to rank the fictional catalogue.
+The fitting ticket (the tailor's five questions) is held in browser memory to
+rank the fictional catalogue. It never changes a size. Tapped answers never
+leave the browser. A typed answer is the one exception: the question, its
+options and the typed text are sent through `/api/tailor` to Anthropic's API
+to be matched to an option, then discarded. Nothing else is sent with it — no
+measurements, size or earlier answers — and the route neither logs nor stores
+it. Without `ANTHROPIC_API_KEY` the route is off and the typed words are
+written on the ticket as they are.
 Marketing consent is separate and optional. The subscription endpoint currently
 returns 503 because no store is implemented; it does not claim a successful signup.
 Adding persistence requires a retention period, deletion path and updated notices.

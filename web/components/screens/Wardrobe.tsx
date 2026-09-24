@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { Body, Button, Eyebrow, Footer, Note, Screen, Title } from "@/components/ui";
+import { Body, Button, CornerLogo, Eyebrow, Footer, Note, Screen, Title } from "@/components/ui";
 import { BRANDS, chartFor, type BrandChart, type BrandName, type Line } from "@/lib/brands";
 
 function Chips<T extends string | number>({
@@ -12,7 +12,7 @@ function Chips<T extends string | number>({
       {options.map((o) => (
         <button key={o} type="button" onClick={() => onPick(o)}
                 className={`figure rounded-lg px-3 py-2 text-[12.5px] transition
-                  ${value === o ? "bg-navy text-white" : "bg-paper text-mute hover:text-ink"}`}>
+                  ${value === o ? "bg-chalk text-ground" : "bg-surface text-mute hover:text-chalk"}`}>
           {label(o)}
         </button>
       ))}
@@ -42,16 +42,17 @@ export function Wardrobe({
 
   return (
     <Screen>
+      <CornerLogo />
       <Body>
         <button type="button" onClick={onBack}
-                className="pt-6 text-[12.5px] text-mute hover:text-ink">
+                className="pt-[22px] text-[12.5px] text-mute hover:text-chalk">
           ← Back
         </button>
 
         {switcher}
 
         <Eyebrow>No camera needed</Eyebrow>
-        <Title>Which jeans that you own fit you best?</Title>
+        <Title>Which jeans that you own fit you <em>best?</em></Title>
         <p className="pt-3.5 text-[14px] leading-[1.5] text-mute">
           No tape measure to hand? Everybody knows which jeans they reach for
           first. Look at the label inside the waistband.
@@ -63,7 +64,7 @@ export function Wardrobe({
             <button key={b} type="button" onClick={() => pickChart(b, line)}
                     className={`rounded-xl border px-3 py-3 text-[13.5px] font-medium transition
                       ${brand === b
-                        ? "border-navy bg-white" : "border-line-soft bg-white hover:border-line"}`}>
+                        ? "border-chalk bg-surface" : "border-chalk/10 bg-surface hover:border-chalk/25"}`}>
               {b}
             </button>
           ))}

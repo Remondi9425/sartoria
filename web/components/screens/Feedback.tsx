@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Body, Eyebrow, Note, Screen, Title } from "@/components/ui";
+import { Body, CornerLogo, Eyebrow, Note, Screen, Title } from "@/components/ui";
 import type { Product } from "@/lib/engine/types";
 
 type Answer = "tight" | "right" | "loose";
@@ -19,11 +19,12 @@ export function Feedback({
 
   return (
     <Screen>
+      <CornerLogo />
       <Body>
         <Eyebrow>
           {product.brand} · {size.split(" ")[0]} · delivered Friday
         </Eyebrow>
-        <Title>How did they fit?</Title>
+        <Title>How did they <em>fit?</em></Title>
         <p className="pt-3.5 text-[14px] leading-[1.5] text-mute">
           Two taps. It is the only way we learn how this brand really runs.
         </p>
@@ -35,10 +36,10 @@ export function Feedback({
                     className={`flex w-full items-center gap-4 rounded-xl border px-5 py-4
                       text-left transition
                       ${picked === o.id
-                        ? "border-navy bg-white"
-                        : "border-line-soft bg-white hover:border-line"}`}>
+                        ? "border-chalk bg-surface"
+                        : "border-chalk/10 bg-surface hover:border-chalk/25"}`}>
               <span className={`figure w-5 text-center text-[17px]
-                                ${picked === o.id ? "text-navy" : "text-rust"}`}>
+                                ${picked === o.id ? "text-amber" : "text-rust"}`}>
                 {picked === o.id ? "✓" : o.icon}
               </span>
               <span>
@@ -50,7 +51,7 @@ export function Feedback({
         </div>
 
         {picked && (
-          <div className="mt-6 rounded-xl bg-paper px-4 py-3.5">
+          <div className="mt-6 rounded-xl bg-surface px-4 py-3.5">
             <p className="text-[12px] leading-[1.5] text-mute">
               This is where the answer would go against {product.brand}&rsquo;s
               chart. Nothing is saved yet — the loop that learns from it is not

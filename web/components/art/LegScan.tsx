@@ -1,6 +1,6 @@
 "use client";
 
-import { INK, PointCloud, type Point3 } from "@/components/art/PointCloud";
+import { CHALK, PointCloud, type Point3 } from "@/components/art/PointCloud";
 
 /**
  * The customer's own legs, drawn from the surface points the body model
@@ -16,7 +16,7 @@ export function LegScan({
   points, className = "",
 }: { points: Point3[]; className?: string }) {
   return (
-    <PointCloud points={points} tint={INK} turnSeconds={33} draggable
+    <PointCloud points={points} tint={CHALK} turnSeconds={33} draggable
                 label="Your legs, as measured — drag to turn"
                 className={className} />
   );

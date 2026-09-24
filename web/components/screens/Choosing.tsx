@@ -1,81 +1,94 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Jeans } from "@/components/art/Jeans";
-import { Body, Eyebrow, Note, Screen, Title, euro } from "@/components/ui";
-import { PRODUCTS, BRANDS } from "@/lib/catalog";
-import { EMPTY_TASTE, rankByTaste, type Taste } from "@/lib/preferences";
+import { useMemo } from "react";
+import { BackLink, Body, CornerLogo, Eyebrow, Screen, Title, euro } from "@/components/ui";
+import { PRODUCTS } from "@/lib/catalog";
+import { rankByNeeds, type Need } from "@/lib/preferences";
 import { calculator } from "@/lib/engine";
 import type { DigitalTwin, Product } from "@/lib/engine/types";
 
-type Filter = "yours" | "slim" | "straight";
-
+/**
+ * The size ledger: every pair, the size in that brand, and why it sits where
+ * it does.
+ *
+ * The size is computed per product, because "W31" is not the same number in
+ * two different brands — which is the whole point of the product. The ticket
+ * only ever reorders: it cannot change a size, and it cannot hide a pair.
+ */
 export function Choosing({
-  twin, onPick, taste = EMPTY_TASTE,
-}: { twin: DigitalTwin; onPick: (p: Product) => void; taste?: Taste }) {
-  const [filter, setFilter] = useState<Filter>("yours");
-
-  // The size is computed per product, because "W31" is not the same number
-  // in two different brands — which is the whole point of the product.
-  //
-  // Taste only ever reorders. It cannot promote a pair that does not fit or
-  // hide one that does: the filter below still decides what is shown, and the
-  // size still decides what fits.
+  twin, needs, onPick, onEdit, logoHidden = false,
+}: {
+  twin: DigitalTwin; needs: Need[];
+  onPick: (p: Product) => void; onEdit: () => void; logoHidden?: boolean;
+}) {
   const rows = useMemo(
-    () => rankByTaste(PRODUCTS, taste)
-      .map((p) => ({ p, fit: calculator.recommend(twin, p) })),
-    [twin, taste]);
-
-  const shown = rows.filter(({ p, fit }) =>
-    filter === "yours" ? fit.size !== null
-    : filter === "slim" ? p.fit === "slim" || p.fit === "tapered"
-    : p.fit === "straight" || p.fit === "relaxed");
+    () => rankByNeeds(PRODUCTS, needs)
+      .map((r) => ({ ...r, fit: calculator.recommend(twin, r.product) })),
+    [twin, needs]);
 
   return (
     <Screen>
-      <Body>
-        <Eyebrow>{shown.length} pairs · {BRANDS.length} brands</Eyebrow>
-        <Title>Jeans that fit you.</Title>
+      <CornerLogo hidden={logoHidden} />
+      <Body className="!px-6 pb-5">
+        <BackLink onClick={onEdit}>← Edit the ticket</BackLink>
+        <Eyebrow>{PRODUCTS.length} charts · read against your numbers</Eyebrow>
+        <Title>Your size, brand <em>by brand.</em></Title>
 
-        <div className="flex gap-2 pt-5">
-          {([["yours", "Your size only"], ["slim", "Slim"], ["straight", "Straight"]] as const)
-            .map(([id, label]) => (
-              <button key={id} type="button" onClick={() => setFilter(id)}
-                      className={`rounded-full px-4 py-2 text-[12.5px] font-medium transition
-                        ${filter === id
-                          ? "bg-navy text-white"
-                          : "bg-paper text-mute hover:text-ink"}`}>
-                {label}
-              </button>
-            ))}
-        </div>
+        {needs.length > 0 && (
+          <p className="pt-3 text-[12px] leading-[1.5] text-mute">
+            From your ticket:{" "}
+            <span className="text-chalk">{needs.map((n) => n.label).join(" · ")}</span>
+          </p>
+        )}
 
-        <div className="grid grid-cols-2 gap-3.5 pt-5 pb-2">
-          {shown.map(({ p, fit }) => (
-            <button key={p.id} type="button" onClick={() => onPick(p)}
-                    className="group text-left">
-              <div className="relative overflow-hidden rounded-xl bg-paper p-3">
-                <Jeans denim={p.colours[0].denim} fit={p.fit}
-                       className="mx-auto h-32 transition group-hover:scale-[1.04]" />
-                <span className="figure absolute left-2.5 top-2.5 rounded-md bg-navy
-                                 px-2 py-1 text-[10.5px] font-semibold text-white">
-                  {fit.size?.split(" ")[0] ?? "?"}
+        {/* A tape rule across the top of the ledger. */}
+        <div className="mt-[18px] h-3.5" aria-hidden="true"
+             style={{ background:
+               "repeating-linear-gradient(90deg,rgba(240,231,217,.5) 0 1px,transparent 1px 40px) top/100% 14px no-repeat," +
+               "repeating-linear-gradient(90deg,rgba(240,231,217,.25) 0 1px,transparent 1px 8px) top/100% 7px no-repeat" }} />
+
+        <ol>
+          {rows.map(({ product: p, reasons, fit }, i) => (
+            <li key={p.id}>
+              <button type="button" onClick={() => onPick(p)}
+                      className="grid w-full grid-cols-[26px_minmax(0,1fr)_auto] items-start gap-2.5
+                                 border-b border-dashed border-chalk/14 py-3.5 text-left
+                                 transition hover:bg-chalk/[.03]">
+                <span className="figure pt-[3px] text-[11px] font-medium text-faint">
+                  {String(i + 1).padStart(2, "0")}
                 </span>
-              </div>
-              <p className="pt-2.5 text-[13.5px] font-semibold leading-tight">{p.name}</p>
-              <p className="pt-0.5 text-[11.5px] text-mute">
-                {p.brand.replace(" Denim", "")} · {euro(p.price_eur)}
-              </p>
-            </button>
+                <span className="block">
+                  <span className="figure block text-[9.5px] font-medium tracking-[.14em] text-faint uppercase">
+                    {p.brand}
+                  </span>
+                  <span className="block pt-[3px] font-serif text-[21px] leading-[1.1]">{p.name}</span>
+                  {reasons.length > 0 ? (
+                    <span className="block pt-[5px] text-[11.5px] leading-[1.35] text-amber">
+                      {reasons.join(" · ")}
+                    </span>
+                  ) : (
+                    <span className="block pt-[5px] text-[11.5px] leading-[1.35] text-faint">
+                      {p.fit[0].toUpperCase() + p.fit.slice(1)} · {p.composition}
+                    </span>
+                  )}
+                </span>
+                <span className="block text-right">
+                  <span className="figure block text-[24px] font-semibold leading-none">
+                    {fit.size?.split(" ")[0] ?? "—"}
+                  </span>
+                  <span className="figure block pt-[5px] text-[11px] text-mute">
+                    {euro(p.price_eur)}
+                  </span>
+                </span>
+              </button>
+            </li>
           ))}
-        </div>
+        </ol>
 
-        <div className="pb-4 text-center">
-          <Note>
-            The badge is your size <em>in that brand</em> — not the same number
-            everywhere.
-          </Note>
-        </div>
+        <p className="pt-[18px] text-[11.5px] leading-[1.5] text-faint">
+          W30 in one brand and W31 in the next is normal: each row is read from
+          that brand&apos;s own chart.
+        </p>
       </Body>
     </Screen>
   );

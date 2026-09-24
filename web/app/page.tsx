@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Frame } from "@/components/Frame";
 import { Choosing } from "@/components/screens/Choosing";
 import { Checkout } from "@/components/screens/Checkout";
@@ -8,10 +8,10 @@ import { Feedback } from "@/components/screens/Feedback";
 import { Filming } from "@/components/screens/Filming";
 import { ManualEntry, NoVideoSwitch } from "@/components/screens/ManualEntry";
 import { Measurements } from "@/components/screens/Measurements";
-import { Preferences } from "@/components/screens/Preferences";
 import { Product as ProductScreen } from "@/components/screens/Product";
-import { EMPTY_TASTE, type Taste } from "@/lib/preferences";
 import { Rejected } from "@/components/screens/Rejected";
+import { EMPTY_TICKET, Tailor, needsOf, type Ticket } from "@/components/screens/Tailor";
+import { LAND_MS, NeedleFlight, SWAP_MS, type Flight } from "@/components/NeedleFlight";
 import { Wardrobe } from "@/components/screens/Wardrobe";
 import { Welcome } from "@/components/screens/Welcome";
 import { calculator, getEngine, type Scenario } from "@/lib/engine";
@@ -24,7 +24,7 @@ import type {
 
 type Step =
   | "welcome" | "manual" | "owned" | "filming" | "analysing" | "rejected" | "wardrobe"
-  | "measurements" | "preferences" | "choosing" | "product" | "checkout"
+  | "measurements" | "tailor" | "choosing" | "product" | "checkout"
   | "feedback";
 
 /** ?demo=no-head, ?demo=no-turn, ?demo=unsure — so the refusal paths can be
@@ -44,12 +44,43 @@ export default function App() {
   const [elapsed, setElapsed] = useState(0);
   const [product, setProduct] = useState<Product | null>(null);
   const [colourId, setColourId] = useState<string>("");
-  // Taste never leaves this component. It is not sent anywhere and not stored.
-  const [taste, setTaste] = useState<Taste>(EMPTY_TASTE);
+  // The fitting ticket never leaves this component, except a typed answer on
+  // its way to be read (see app/api/tailor). It is not stored anywhere.
+  const [ticket, setTicket] = useState<Ticket>(EMPTY_TICKET);
+  const needs = useMemo(() => needsOf(ticket), [ticket]);
   const abort = useRef<AbortController | null>(null);
   const [engineIsStub, setEngineIsStub] = useState(true);
 
-  useEffect(() => () => abort.current?.abort(), []);
+  // The needle transition: pulled from the wordmark's button, landing where
+  // the corner logo will be drawn.
+  const phone = useRef<HTMLDivElement>(null);
+  const button = useRef<HTMLSpanElement>(null);
+  const [flight, setFlight] = useState<(Flight & { id: number }) | null>(null);
+  const timers = useRef<number[]>([]);
+  const flying = useRef(false);
+
+  useEffect(() => () => {
+    abort.current?.abort();
+    timers.current.forEach((t) => window.clearTimeout(t));
+  }, []);
+
+  const fly = useCallback((veil: string, go: () => void) => {
+    const ph = phone.current, b = button.current;
+    if (flying.current) return;
+    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (!ph || !b || still) return go();
+    const pr = ph.getBoundingClientRect(), br = b.getBoundingClientRect();
+    // The corner logo: 34 px, 24 px in from the top right.
+    setFlight({
+      id: Date.now(), width: pr.width, height: pr.height, size: 34, veil,
+      from: { x: br.left + br.width / 2 - pr.left, y: br.top + br.height / 2 - pr.top },
+      to: { x: pr.width - 24 - 17, y: 24 + 17 },
+    });
+    flying.current = true;
+    timers.current.push(window.setTimeout(go, SWAP_MS),
+                        window.setTimeout(() => { flying.current = false; setFlight(null); },
+                                          LAND_MS));
+  }, []);
 
   const start = useCallback((heightCm: number) => {
     setHeight(heightCm);
@@ -116,15 +147,17 @@ export default function App() {
     const t = twinFromOwnedPair(chart, w, l, height);
     if (!t) return;
     setTwin(t);
-    setStep("preferences");
+    setTicket(EMPTY_TICKET);
+    setStep("tailor");
   }, [height]);
 
   return (
-    <Frame>
+    <Frame ref={phone}>
       {step === "welcome" && (
-        <Welcome onStart={start}
+        <Welcome buttonRef={button}
+                 onStart={(h) => fly("#141210", () => start(h))}
                  onUseFile={(h, clip) => { setHeight(h); analyse(clip, h); }}
-                 onManual={(h) => { setHeight(h); setStep("manual"); }} />
+                 onManual={(h) => fly("#1b1916", () => { setHeight(h); setStep("manual"); })} />
       )}
 
       {/* The two ways in without a video, side by side: numbers from a tape
@@ -132,10 +165,14 @@ export default function App() {
           numbers skip the measurements screen: it would only read back what
           was just typed, under a video-consistency tier that does not apply. */}
       {step === "manual" && (
-        <ManualEntry onBack={() => setStep("welcome")}
+        <ManualEntry onBack={() => setStep("welcome")} logoHidden={!!flight}
                      switcher={<NoVideoSwitch value="measurements"
                                               onChange={() => setStep("owned")} />}
-                     onDone={(m) => { setTwin(twinFromManual(m, height)); setStep("preferences"); }} />
+                     onDone={(m) => {
+                       setTwin(twinFromManual(m, height));
+                       setTicket(EMPTY_TICKET);
+                       setStep("tailor");
+                     }} />
       )}
 
       {step === "owned" && (
@@ -146,7 +183,7 @@ export default function App() {
 
       {(step === "filming" || step === "analysing") && (
         <Filming phase={step === "filming" ? "recording" : "analysing"}
-                 progress={progress} isStub={engineIsStub}
+                 progress={progress} isStub={engineIsStub} logoHidden={!!flight}
                  onRecorded={analyse} onCameraDenied={cameraDenied} />
       )}
 
@@ -162,17 +199,18 @@ export default function App() {
 
       {step === "measurements" && twin && (
         <Measurements twin={twin} seconds={elapsed || 11}
-                      onNext={() => setStep("preferences")} />
+                      onNext={() => { setTicket(EMPTY_TICKET); setStep("tailor"); }}
+                      onSkip={() => { setTicket(EMPTY_TICKET); setStep("choosing"); }} />
       )}
 
-      {step === "preferences" && (
-        <Preferences
-          onDone={(t) => { setTaste(t); setStep("choosing"); }}
-          onSkip={() => { setTaste(EMPTY_TASTE); setStep("choosing"); }} />
+      {step === "tailor" && (
+        <Tailor twin={twin} ticket={ticket} onChange={setTicket}
+                onDone={() => setStep("choosing")} />
       )}
 
       {step === "choosing" && twin && (
-        <Choosing twin={twin} taste={taste}
+        <Choosing twin={twin} needs={needs}
+                  onEdit={() => setStep("tailor")}
                   onPick={(p) => { setProduct(p); setStep("product"); }} />
       )}
 
@@ -194,6 +232,8 @@ export default function App() {
                   size={calculator.recommend(twin, product).size ?? "—"}
                   onAnswer={() => {}} />
       )}
+
+      {flight && <NeedleFlight key={flight.id} {...flight} />}
     </Frame>
   );
 }
