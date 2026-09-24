@@ -7,10 +7,10 @@ description = "Does a phone video give leg measurements good enough to pick a je
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "opencv-python-headless>=4.10",
-    # Pinned below 2 to match the Modal image, which mediapipe's successor
-    # constraints once forced and torch still prefers. Letting the two drift
-    # meant the local tests and the worker ran different array semantics.
-    "numpy>=1.26,<2",
+    # The Modal image installs the same numpy from requirements-runtime.txt,
+    # exported from uv.lock. Letting the two drift once meant the local tests
+    # and the worker ran different array semantics.
+    "numpy>=1.26,<3",
     "fastapi>=0.115",
     "python-multipart>=0.0.9",
     "modal>=1.5",
