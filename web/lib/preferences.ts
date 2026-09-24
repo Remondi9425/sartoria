@@ -1,108 +1,150 @@
 /**
- * Taste, and what it is allowed to do.
+ * Needs, and what they are allowed to do.
  *
- * The size calculator answers "will these fit". This answers "would they want
- * these", which is a different question and a smaller one: it only ever
- * reorders jeans that already fit. It cannot promote a pair that does not, and
- * it cannot demote one out of sight — a customer who asked for a size gets the
- * sizes, in an order they are more likely to like.
+ * The size calculator answers "will these fit". This answers "which of the
+ * ones that fit suit how you wear jeans", which is a different question and a
+ * smaller one: it only ever reorders. It cannot promote a pair that does not
+ * fit, and it cannot demote one out of sight — a customer who asked for a size
+ * gets the sizes, in an order that matches the fitting ticket.
  *
- * Real arithmetic, not a stub, and deliberately never an LLM: the same answer
- * every time, and every step of it explicable to the person it is about.
+ * Real arithmetic, not a stub, and deliberately never an LLM: the same ticket
+ * gives the same order every time, and every step of it is explicable to the
+ * person it is about. The tailor's chat may *name* a need from typed words;
+ * it never scores one. A need it could not map to a known id is kept as a
+ * note on the ticket and has no effect on the order.
  *
  * This is not profiling in the sense the regulation worries about. Nothing is
  * inferred from behaviour, nothing is tracked across sites, and nothing is
- * decided about the customer — they state a preference and the shelf is
- * arranged to match. See PRIVACY.md.
+ * decided about the customer — they state a need and the shelf is arranged to
+ * match. See PRIVACY.md.
  */
 import type { Product } from "./engine/types";
 
 export type Fit = Product["fit"];
 
-/** How close each cut sits, from nearest the leg to furthest.
- *
- *  Ordered rather than merely named, so a customer who asked for slim and is
- *  shown a straight leg is treated as closer than one shown relaxed. The scale
- *  is about proximity to the leg, which is what a taste in cut is about. */
-const CLOSENESS: Record<Fit, number> = {
+/** How close each cut sits, from nearest the leg to furthest. Ordered rather
+ *  than merely named, so "close" and "easy" can lean without being binary. */
+export const CLOSENESS: Record<Fit, number> = {
   slim: 0, tapered: 1, straight: 2, relaxed: 3,
 };
 
-export interface Taste {
-  /** The cut they said they like. */
-  fit?: Fit;
-  /** The colour id they said they like, matching Product.colours[].id. */
-  wash?: string;
-  /** Whether the same cut should sit closer or easier than standard. */
-  ease?: "close" | "standard" | "easy";
+/** The needs the ranking knows how to read. Anything else is a note. */
+export type NeedId =
+  | "cycling" | "travel" | "office" | "close" | "easy" | "thighs" | "gap"
+  | "short" | "seated" | "wheelchair" | "closures" | "nostretch" | "soft"
+  | "tagless";
+
+export interface Need {
+  /** A known NeedId, or `note-…` for something typed that maps to none. */
+  id: NeedId | `note-${string}`;
+  /** What the ticket says, in the customer's terms. */
+  label: string;
 }
 
-export const EMPTY_TASTE: Taste = {};
+/** Stretch is read off the label rather than stored twice. */
+export function hasStretch(p: Product): boolean {
+  return /elastane/i.test(p.composition);
+}
 
-/** Nothing stated is not the same as no opinion — it means do not reorder. */
-export function isEmpty(t: Taste): boolean {
-  return !t.fit && !t.wash && (!t.ease || t.ease === "standard");
+/** The longest leg the pair is cut in, in centimetres. */
+export function inseamOf(p: Product): number {
+  return Math.max(...p.chart.rows.map((r) => r.inseam_cm));
+}
+
+export interface Scored {
+  score: number;
+  /** Why it moved up, in words the customer can check against the pair. */
+  reasons: string[];
 }
 
 /**
- * How well one pair matches a stated taste, 0 to 1.
+ * How well one pair answers the ticket, with the reasons.
  *
  * Exported because a score a customer cannot see is a score nobody can argue
- * with, and the screen shows it as a reason rather than a number.
+ * with; the ledger shows the reasons rather than the number.
  */
-export function tasteScore(product: Product, taste: Taste): number {
-  const parts: number[] = [];
+export function scoreNeeds(p: Product, needs: Need[]): Scored {
+  let score = 0;
+  const reasons: string[] = [];
+  const add = (v: number, why: string | null) => {
+    score += v;
+    if (why && v > 0 && !reasons.includes(why)) reasons.push(why);
+  };
+  const stretch = hasStretch(p);
+  const high = p.rise === "high";
+  const close = CLOSENESS[p.fit];
 
-  if (taste.fit) {
-    // Full marks for the cut they asked for, falling away with distance on the
-    // closeness scale. Three steps apart — slim against relaxed — scores zero
-    // rather than going negative, because a taste is a preference and not a
-    // veto.
-    const apart = Math.abs(CLOSENESS[product.fit] - CLOSENESS[taste.fit]);
-    parts.push(Math.max(0, 1 - apart / 3));
+  for (const n of needs) {
+    switch (n.id) {
+      case "cycling":
+        add(stretch ? 1 : 0, "Stretch");
+        add(high ? 1 : 0, "High back rise");
+        break;
+      case "travel":
+        add(stretch ? 1 : 0, "Stretch");
+        break;
+      case "office":
+        add(p.colours.some((c) => c.id === "dark") ? 1 : 0, "Comes in dark rinse");
+        add(p.fit === "slim" || p.fit === "straight" ? 0.5 : 0, "Clean cut");
+        break;
+      case "close":
+        add(1 - close / 3, close <= 1 ? "Closer cut" : null);
+        break;
+      case "easy":
+        add(close / 3, close >= 2 ? "Easier cut" : null);
+        break;
+      case "thighs":
+        add(p.fit === "relaxed" || p.fit === "tapered" ? 1 : 0, "Room at the thigh");
+        break;
+      case "gap":
+        add(stretch ? 0.5 : 0, "Stretch");
+        add(high ? 0.5 : 0, "Higher rise");
+        break;
+      case "short": {
+        const inseam = inseamOf(p);
+        add(inseam >= 82 ? 1 : 0, `Longer leg (${inseam} cm)`);
+        break;
+      }
+      case "seated":
+        add(high ? 1 : 0, "High back rise");
+        add(stretch ? 0.5 : 0, "Stretch");
+        break;
+      case "wheelchair":
+        add(high ? 1 : 0, "High back rise");
+        add(stretch ? 1 : 0, "Stretch");
+        add(p.fly === "zip" ? 0.5 : 0, "Zip fly");
+        break;
+      case "closures":
+        add(p.fly === "zip" ? 1 : -0.5, "Zip fly");
+        break;
+      case "nostretch":
+        add(stretch ? -1 : 1, "Rigid denim");
+        break;
+      case "soft":
+        add(p.soft ? 1 : 0, "Soft hand");
+        break;
+      case "tagless":
+        add(p.tagless ? 1 : 0, "Printed label");
+        break;
+      default:
+        // A note: on the ticket, and nowhere in the arithmetic.
+        break;
+    }
   }
-
-  if (taste.wash) {
-    // Binary on purpose. A pair either comes in the colour or it does not, and
-    // there is no meaningful distance between a light wash and a black one.
-    parts.push(product.colours.some((c) => c.id === taste.wash) ? 1 : 0);
-  }
-
-  if (taste.ease && taste.ease !== "standard") {
-    // Asking for it closer or easier shifts which cut counts as ideal by one
-    // step, which is what "the same jeans but roomier" means on a rail.
-    const wanted = taste.ease === "close" ? 0 : 3;
-    const apart = Math.abs(CLOSENESS[product.fit] - wanted);
-    parts.push(Math.max(0, 1 - apart / 3));
-  }
-
-  if (parts.length === 0) return 0;
-  return parts.reduce((a, b) => a + b, 0) / parts.length;
+  return { score, reasons };
 }
 
 /**
- * The same jeans, in the order this customer is more likely to want them.
+ * The same jeans, in the order the ticket asks for, each with its reasons.
  *
- * Stable: equal scores keep the order they came in, so the catalogue's own
- * ordering shows through rather than being shuffled by a sort that felt free
- * to reorder ties.
+ * Stable: equal scores keep the catalogue's own order, so an empty ticket — or
+ * one made only of notes — leaves the rail exactly as it was.
  */
-export function rankByTaste<T extends Product>(products: T[], taste: Taste): T[] {
-  if (isEmpty(taste)) return [...products];
+export function rankByNeeds<T extends Product>(
+  products: T[], needs: Need[],
+): (Scored & { product: T })[] {
   return products
-    .map((p, i) => ({ p, i, score: tasteScore(p, taste) }))
+    .map((product, i) => ({ product, i, ...scoreNeeds(product, needs) }))
     .sort((a, b) => (b.score - a.score) || (a.i - b.i))
-    .map((x) => x.p);
-}
-
-/** Why this pair came first, in words the customer can check against. */
-export function reasonFor(product: Product, taste: Taste): string | null {
-  const said: string[] = [];
-  if (taste.fit && product.fit === taste.fit) said.push(`a ${taste.fit} cut`);
-  if (taste.wash && product.colours.some((c) => c.id === taste.wash)) {
-    const name = product.colours.find((c) => c.id === taste.wash)!.name;
-    said.push(name.toLowerCase());
-  }
-  if (said.length === 0) return null;
-  return `You said you like ${said.join(" and ")}.`;
+    .map(({ product, score, reasons }) => ({ product, score, reasons }));
 }

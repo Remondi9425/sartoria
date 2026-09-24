@@ -9,7 +9,9 @@
  * charts used to read back a pair the customer already owns. Nothing is sold
  * under their names.
  *
- * The size charts are realistic in shape, not copied from anyone. When the
+ * The size charts are realistic in shape, not copied from anyone. So are the
+ * construction details — rise, fly, hand, label — which exist only so the
+ * fitting ticket has something true-to-this-catalogue to reorder by. When the
  * Catalog Ingestor is real it will replace this file wholesale.
  */
 import type { Product, SizeChart } from "./engine/types";
@@ -49,6 +51,7 @@ export const PRODUCTS: Product[] = [
     id: "marea-slim-tapered",
     brand: "Marea Denim", name: "Slim Tapered", fit: "tapered",
     price_eur: 129, composition: "98% cotton · 2% elastane",
+    rise: "mid", fly: "zip", soft: false, tagless: true,
     colours: [INDIGO, LIGHT, DARK, BLACK],
     chart: bodyChart(68, 82),
   },
@@ -56,6 +59,7 @@ export const PRODUCTS: Product[] = [
     id: "fosco-regular-straight",
     brand: "Fosco", name: "Regular Straight", fit: "straight",
     price_eur: 119, composition: "100% cotton",
+    rise: "mid", fly: "button", soft: false, tagless: false,
     colours: [LIGHT, INDIGO, DARK],
     chart: flatChart(70, 81),
   },
@@ -63,6 +67,7 @@ export const PRODUCTS: Product[] = [
     id: "marea-relaxed-carpenter",
     brand: "Marea Denim", name: "Relaxed Carpenter", fit: "relaxed",
     price_eur: 139, composition: "100% cotton",
+    rise: "high", fly: "zip", soft: true, tagless: true,
     colours: [DARK, INDIGO],
     chart: bodyChart(68, 80),
   },
@@ -70,6 +75,7 @@ export const PRODUCTS: Product[] = [
     id: "vela-tapered-crop",
     brand: "Vela", name: "Tapered Crop", fit: "tapered",
     price_eur: 109, composition: "97% cotton · 3% elastane",
+    rise: "mid", fly: "zip", soft: false, tagless: false,
     colours: [BLACK, INDIGO, LIGHT],
     chart: bodyChart(71, 76),
   },
@@ -77,6 +83,7 @@ export const PRODUCTS: Product[] = [
     id: "nebbia-slim-stretch",
     brand: "Nebbia", name: "Slim Stretch", fit: "slim",
     price_eur: 99, composition: "94% cotton · 5% polyester · 1% elastane",
+    rise: "low", fly: "zip", soft: true, tagless: true,
     colours: [INDIGO, DARK],
     chart: flatChart(71, 83),
   },
@@ -84,6 +91,7 @@ export const PRODUCTS: Product[] = [
     id: "fosco-loose-taper",
     brand: "Fosco", name: "Loose Taper", fit: "relaxed",
     price_eur: 129, composition: "100% cotton",
+    rise: "high", fly: "zip", soft: true, tagless: false,
     colours: [LIGHT, BLACK],
     chart: bodyChart(69, 79),
   },
@@ -91,6 +99,7 @@ export const PRODUCTS: Product[] = [
     id: "vela-straight-rigid",
     brand: "Vela", name: "Straight Rigid", fit: "straight",
     price_eur: 149, composition: "100% cotton, unwashed",
+    rise: "high", fly: "button", soft: false, tagless: false,
     colours: [DARK, INDIGO],
     chart: bodyChart(72, 84),
   },
@@ -98,6 +107,7 @@ export const PRODUCTS: Product[] = [
     id: "nebbia-easy-straight",
     brand: "Nebbia", name: "Easy Straight", fit: "straight",
     price_eur: 89, composition: "99% cotton · 1% elastane",
+    rise: "mid", fly: "zip", soft: true, tagless: true,
     colours: [INDIGO, LIGHT, BLACK],
     chart: flatChart(69, 80),
   },

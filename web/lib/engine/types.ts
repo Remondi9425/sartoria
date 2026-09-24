@@ -119,6 +119,13 @@ export interface Product {
   fit: "slim" | "straight" | "relaxed" | "tapered";
   price_eur: number;
   composition: string;
+  /** How high the back of the waistband sits. Matters for sitting and cycling. */
+  rise: "low" | "mid" | "high";
+  fly: "zip" | "button";
+  /** A washed or blended denim that is soft from the first wear. */
+  soft: boolean;
+  /** The size is printed inside rather than sewn on as a label. */
+  tagless: boolean;
   colours: { id: string; name: string; hex: string; denim: string }[];
   chart: SizeChart;
 }

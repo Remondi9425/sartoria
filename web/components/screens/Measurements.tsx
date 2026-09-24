@@ -1,8 +1,11 @@
 "use client";
 
-import { LegDiagram } from "@/components/art/LegDiagram";
+import { CHALK, PointCloud } from "@/components/art/PointCloud";
 import { LegScan } from "@/components/art/LegScan";
-import { Body, Button, Eyebrow, Footer, Note, Screen, StubBadge, Title } from "@/components/ui";
+import { legsCloud } from "@/components/art/bodyCloud";
+import {
+  Body, Button, CornerLogo, Eyebrow, Footer, Note, Screen, SpeakingBars, StubBadge, Title,
+} from "@/components/ui";
 import type { DigitalTwin } from "@/lib/engine/types";
 
 /**
@@ -35,21 +38,23 @@ function shaky(twin: DigitalTwin): string[] {
 }
 
 export function Measurements({
-  twin, seconds, onNext,
-}: { twin: DigitalTwin; seconds: number; onNext: () => void }) {
+  twin, seconds, onNext, onSkip,
+}: { twin: DigitalTwin; seconds: number; onNext: () => void; onSkip: () => void }) {
   // The contract carries its own provenance, so no screen needs a flag that
   // somebody could forget to flip when the real engine lands.
   const stub = twin.processing_method.startsWith("stub");
+  const own = !!twin.leg_cloud_cm?.length;
   return (
     <Screen>
+      <CornerLogo />
       <Body>
         <Eyebrow>Done — {seconds} seconds</Eyebrow>
-        <Title>These are your numbers.</Title>
+        <Title>These are your <em>numbers.</em></Title>
 
         {stub && (
-          <div className="pt-4">
+          <div className="flex flex-col items-start gap-2 pt-3.5">
             <StubBadge />
-            <p className="pt-2.5 text-[12px] leading-[1.5] text-mute">
+            <p className="text-[12px] leading-[1.5] text-mute">
               Nothing was measured — the video was never looked at. Fixed
               values, so the flow can be walked through before the measurement
               engine exists.
@@ -57,54 +62,63 @@ export function Measurements({
           </div>
         )}
 
-        {/* The scan when there is one, the drawing when there is not. The
-            drawing is a generic body with the numbers attached to it; the scan
-            is the person's own legs, which is what the measurements were
-            actually taken from. */}
-        {twin.leg_cloud_cm?.length ? (
-          <div className="pt-5">
-            <div className="rounded-2xl bg-paper py-4">
-              <LegScan points={twin.leg_cloud_cm} className="h-[300px] w-full" />
-            </div>
-            <p className="pt-2 text-center text-[11px] text-faint">
-              Your legs, as measured · drag to turn
-            </p>
-            <div className="grid grid-cols-4 gap-2 pt-4">
-              {(["waist", "hip", "thigh", "inseam"] as const).map((site) => (
-                <div key={site} className="rounded-lg bg-paper px-2 py-2.5 text-center">
-                  <p className="figure text-[15px] font-semibold leading-none">
-                    {twin.measurements_cm[site]}
-                  </p>
-                  <p className="pt-1 text-[8.5px] uppercase tracking-[.12em] text-faint">
-                    {site}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : (
-          <div className="pt-6">
-            <LegDiagram twin={twin} />
-          </div>
-        )}
+        {/* The scan when there is one. Without one, the same legs that formed
+            while waiting stand in — and say so, because a generic figure next
+            to the customer's numbers could be read as their own. */}
+        <div className="relative mt-4 h-[250px] rounded-[18px] border border-chalk/6 bg-surface">
+          {own ? (
+            <LegScan points={twin.leg_cloud_cm!} className="absolute inset-x-0 inset-y-3 h-[226px] w-full" />
+          ) : (
+            <PointCloud points={legsCloud()} tint={CHALK} turnSeconds={30}
+                        className="absolute inset-x-0 inset-y-3 h-[226px] w-full" />
+          )}
+        </div>
+        <p className="pt-2 text-center text-[11px] text-faint">
+          {own ? "Your legs, as measured · drag to turn"
+               : "A stand-in figure — not your legs"}
+        </p>
 
-        <div className="rounded-xl bg-paper px-4 py-3">
-          <p className="text-[12px] leading-[1.5] text-mute">
-            <span className="font-semibold text-ink">
-              Consistency {twin.data_quality_tier}.
-            </span>{" "}
-            {TIER_NOTE[twin.data_quality_tier]}{" "}
-            {twin.data_quality_tier === "C" && shaky(twin).length > 0 && (
-              <span className="text-ink">
-                Softest here: {shaky(twin).join(", ")}.{" "}
-              </span>
-            )}
-            How close any of this is to a tape measure is still being
-            established.
-          </p>
+        <div className="grid grid-cols-4 gap-2 pt-2.5">
+          {(["waist", "hip", "thigh", "inseam"] as const).map((site) => (
+            <div key={site} className="rounded-[10px] bg-surface px-1 py-2.5 text-center">
+              <p className="figure text-[16px] font-semibold leading-none">
+                {twin.measurements_cm[site]}
+              </p>
+              <p className="figure pt-[5px] text-[8.5px] font-medium uppercase tracking-[.12em] text-faint">
+                {site}
+              </p>
+            </div>
+          ))}
         </div>
 
-        <div className="pt-4 pb-2">
+        <p className="pt-3 text-[12px] leading-[1.5] text-mute">
+          <span className="font-semibold text-chalk">
+            Consistency {twin.data_quality_tier}.
+          </span>{" "}
+          {TIER_NOTE[twin.data_quality_tier]}{" "}
+          {twin.data_quality_tier === "C" && shaky(twin).length > 0 && (
+            <span className="text-chalk">
+              Softest here: {shaky(twin).join(", ")}.{" "}
+            </span>
+          )}
+          How close any of this is to a tape measure is still being
+          established.
+        </p>
+
+        <div className="mt-[18px] mb-2 flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            <SpeakingBars />
+            <span className="figure text-[9.5px] font-medium tracking-[.16em] text-amber uppercase">
+              Tailor
+            </span>
+          </div>
+          <div className="rounded-[18px_18px_18px_4px] bg-surface px-[15px] py-3 text-[14px] leading-[1.45]">
+            These numbers settle your size. Now tell me how you wear jeans. It
+            changes the order I show them in, never the size.
+          </div>
+        </div>
+
+        <div className="pt-2 pb-2">
           <Note>
             Nothing is stored yet — close this and the numbers are gone. When a
             profile exists it will be yours to see, export and delete.
@@ -113,7 +127,10 @@ export function Measurements({
       </Body>
 
       <Footer>
-        <Button onClick={onNext}>Show me jeans that fit</Button>
+        <Button onClick={onNext}>Talk it through · 5 questions</Button>
+        <div className="pt-2.5 text-center">
+          <Button variant="ghost" onClick={onSkip}>Skip — just show me everything</Button>
+        </div>
       </Footer>
     </Screen>
   );
