@@ -57,7 +57,7 @@ numpy==2.5.3
     # via
     #   opencv-python-headless
     #   sartoria-spike
-opencv-python-headless==4.11.0.86
+opencv-python-headless==5.0.0.93
     # via sartoria-spike
 propcache==0.5.4
     # via
