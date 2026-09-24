@@ -4,6 +4,10 @@ updates:
     directory: /web
     schedule:
       interval: weekly
+    ignore:
+      # Types follow the Node major in .nvmrc; bump both together by hand.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: uv
     directory: /
     schedule:
