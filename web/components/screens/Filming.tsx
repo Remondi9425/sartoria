@@ -237,13 +237,11 @@ function useVoice() {
 }
 
 export function Filming({
-  phase, progress, isStub = false, logoHidden = false, onRecorded, onCameraDenied,
+  phase, progress, isStub = false, onRecorded, onCameraDenied,
 }: {
   phase: "recording" | "analysing";
   progress: CaptureProgress;
   isStub?: boolean;
-  /** While the needle is still flying into the corner. */
-  logoHidden?: boolean;
   onRecorded: (clip: Blob | null) => void;
   onCameraDenied: () => void;
 }) {
@@ -321,7 +319,7 @@ export function Filming({
     return (
       <div className="relative flex h-full flex-col overflow-hidden bg-ground-deep
                       px-7 pb-[26px] pt-9 text-chalk">
-        <CornerLogo hidden={logoHidden} />
+        <CornerLogo />
         <p className="eyebrow !text-chalk/45">Before the ten seconds</p>
         <h2 className="pt-2.5 font-serif text-[36px] leading-[1.02] font-normal">
           Set the phone down,<br />then walk <em>back.</em>

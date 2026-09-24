@@ -1,19 +1,17 @@
 "use client";
 
-import { useRef, useState, type Ref } from "react";
+import { useRef, useState } from "react";
 import { CHALK, PointCloud } from "@/components/art/PointCloud";
 import { mannequinCloud } from "@/components/art/bodyCloud";
 import { Body, Button, Footer, Note, PrivacyNote, Screen, StubBadge, Wordmark } from "@/components/ui";
 import { engineConfigured } from "@/lib/engine";
 
 export function Welcome({
-  onStart, onUseFile, onManual, buttonRef,
+  onStart, onUseFile, onManual,
 }: {
   onStart: (heightCm: number) => void;
   onUseFile: (heightCm: number, clip: File) => void;
   onManual: (heightCm: number) => void;
-  /** The wordmark's button, where the needle is pulled from. */
-  buttonRef?: Ref<HTMLSpanElement>;
 }) {
   const [height, setHeight] = useState(174);
   const file = useRef<HTMLInputElement>(null);
@@ -30,7 +28,7 @@ export function Welcome({
 
       <Body className="relative flex flex-col">
         <div className="flex items-center justify-between gap-2.5 pt-7">
-          <Wordmark size={30} buttonRef={buttonRef} />
+          <Wordmark size={30} />
           {!engineConfigured && <StubBadge />}
         </div>
 

@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode, Ref } from "react";
+import type { ReactNode } from "react";
 
 export function Screen({
   children, dark = false, className = "",
@@ -109,15 +109,8 @@ export function TypingDots() {
   );
 }
 
-/**
- * The wordmark: "sart", a sewn button for the "o", "ria".
- *
- * The button carries a ref because the needle transition starts from its
- * centre — the needle is pulled out of it.
- */
-export function Wordmark({
-  size = 30, buttonRef,
-}: { size?: number; buttonRef?: Ref<HTMLSpanElement> }) {
+/** The wordmark: "sart", a sewn button for the "o", "ria". */
+export function Wordmark({ size = 30 }: { size?: number }) {
   const d = Math.round(size * 0.46);
   const hole = Math.max(2, Math.round(d * 0.2));
   const at = [Math.round(d * 0.25), Math.round(d * 0.55)];
@@ -127,7 +120,7 @@ export function Wordmark({
     <p className="m-0 whitespace-nowrap font-serif font-normal text-chalk"
        style={{ fontSize: size, lineHeight: 1 }} aria-label="SartorIA">
       <span aria-hidden="true">sart</span>
-      <span ref={buttonRef} aria-hidden="true"
+      <span aria-hidden="true"
             className="relative inline-block rounded-full bg-amber"
             style={{ width: d, height: d, margin: "0 1px", verticalAlign: 0 }}>
         {at.flatMap((top) => at.map((left) => (
@@ -145,7 +138,7 @@ export function Wordmark({
   );
 }
 
-/** The needle, as drawn in the icon and flown in the transition. */
+/** The needle, as drawn in the icon. */
 export function Needle({ length, plain = false, style }: {
   length: number; plain?: boolean; style?: React.CSSProperties;
 }) {
@@ -192,10 +185,8 @@ export function Logo({ size = 34, needle = true }: { size?: number; needle?: boo
   );
 }
 
-/** The logo in its corner, on every screen after Welcome. Hidden while the
- *  needle is still flying into that corner. */
-export function CornerLogo({ hidden = false }: { hidden?: boolean }) {
-  if (hidden) return null;
+/** The logo in its corner, on every screen after Welcome. */
+export function CornerLogo() {
   return (
     <div className="absolute right-6 top-6 z-10">
       <Logo size={34} />

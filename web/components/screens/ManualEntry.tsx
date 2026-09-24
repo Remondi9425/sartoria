@@ -31,11 +31,9 @@ export function NoVideoSwitch({
 }
 
 export function ManualEntry({
-  onDone, onBack, switcher, logoHidden = false,
+  onDone, onBack, switcher,
 }: {
   onDone: (m: ManualInput) => void; onBack: () => void; switcher?: ReactNode;
-  /** While the needle is still flying into the corner. */
-  logoHidden?: boolean;
 }) {
   const [raw, setRaw] = useState<Record<keyof ManualInput, string>>({
     waist: "", hip: "", inseam: "",
@@ -55,7 +53,7 @@ export function ManualEntry({
 
   return (
     <Screen>
-      <CornerLogo hidden={logoHidden} />
+      <CornerLogo />
       <Body>
         <button type="button" onClick={onBack}
                 className="pt-[22px] text-[12.5px] text-mute hover:text-chalk">
