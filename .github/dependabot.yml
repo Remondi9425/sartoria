@@ -8,6 +8,10 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      # 6.x has no macOS x86_64 wheel; see the note in pyproject.toml.
+      - dependency-name: cbor2
+        versions: [">=6"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
