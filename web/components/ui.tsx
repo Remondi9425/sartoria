@@ -24,14 +24,16 @@ export function Button({
   children, onClick, variant = "primary", disabled,
 }: {
   children: ReactNode; onClick?: () => void;
-  variant?: "primary" | "ghost"; disabled?: boolean;
+  variant?: "primary" | "outline" | "ghost"; disabled?: boolean;
 }) {
   const base =
     "w-full rounded-full py-4 text-[15px] font-semibold transition " +
     "disabled:cursor-not-allowed disabled:opacity-40";
-  const look = variant === "primary"
-    ? "bg-navy text-white hover:bg-navy-soft active:scale-[.99]"
-    : "text-navy underline underline-offset-4 hover:text-rust";
+  const look = {
+    primary: "bg-navy text-white hover:bg-navy-soft active:scale-[.99]",
+    outline: "border border-navy bg-white text-navy hover:bg-paper active:scale-[.99]",
+    ghost: "text-navy underline underline-offset-4 hover:text-rust",
+  }[variant];
   return (
     <button type="button" onClick={onClick} disabled={disabled}
             className={`${base} ${look}`}>
