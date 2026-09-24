@@ -6,6 +6,7 @@ import { Choosing } from "@/components/screens/Choosing";
 import { Checkout } from "@/components/screens/Checkout";
 import { Feedback } from "@/components/screens/Feedback";
 import { Filming } from "@/components/screens/Filming";
+import { ManualEntry, NoVideoSwitch } from "@/components/screens/ManualEntry";
 import { Measurements } from "@/components/screens/Measurements";
 import { Preferences } from "@/components/screens/Preferences";
 import { Product as ProductScreen } from "@/components/screens/Product";
@@ -14,13 +15,14 @@ import { Rejected } from "@/components/screens/Rejected";
 import { Wardrobe } from "@/components/screens/Wardrobe";
 import { Welcome } from "@/components/screens/Welcome";
 import { calculator, getEngine, type Scenario } from "@/lib/engine";
+import { twinFromManual } from "@/lib/engine/manual";
 import { twinFromWardrobe } from "@/lib/engine/wardrobe";
 import type {
   CaptureProgress, CaptureRejected, DigitalTwin, Product,
 } from "@/lib/engine/types";
 
 type Step =
-  | "welcome" | "filming" | "analysing" | "rejected" | "wardrobe"
+  | "welcome" | "manual" | "owned" | "filming" | "analysing" | "rejected" | "wardrobe"
   | "measurements" | "preferences" | "choosing" | "product" | "checkout"
   | "feedback";
 
@@ -106,19 +108,39 @@ export default function App() {
     setStep("rejected");
   }, []);
 
+  // Like typed numbers, a pair read back through its chart skips the
+  // measurements screen: its timer and its consistency tier describe a video,
+  // and there was none.
   const anchor = useCallback((p: Product, size: string) => {
     const t = twinFromWardrobe(p, size, height);
     if (!t) return;
     setTwin(t);
-    setElapsed(0);
-    setStep("measurements");
+    setStep("preferences");
   }, [height]);
 
   return (
     <Frame>
       {step === "welcome" && (
         <Welcome onStart={start}
-                 onUseFile={(h, clip) => { setHeight(h); analyse(clip, h); }} />
+                 onUseFile={(h, clip) => { setHeight(h); analyse(clip, h); }}
+                 onManual={(h) => { setHeight(h); setStep("manual"); }} />
+      )}
+
+      {/* The two ways in without a video, side by side: numbers from a tape
+          measure, or a pair already owned and the size on its label. Typed
+          numbers skip the measurements screen: it would only read back what
+          was just typed, under a video-consistency tier that does not apply. */}
+      {step === "manual" && (
+        <ManualEntry onBack={() => setStep("welcome")}
+                     switcher={<NoVideoSwitch value="measurements"
+                                              onChange={() => setStep("owned")} />}
+                     onDone={(m) => { setTwin(twinFromManual(m, height)); setStep("preferences"); }} />
+      )}
+
+      {step === "owned" && (
+        <Wardrobe onAnchor={anchor} onBack={() => setStep("welcome")}
+                  switcher={<NoVideoSwitch value="owned"
+                                           onChange={() => setStep("manual")} />} />
       )}
 
       {(step === "filming" || step === "analysing") && (

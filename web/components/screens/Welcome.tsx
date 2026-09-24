@@ -5,10 +5,11 @@ import { Body, Button, Footer, Note, PrivacyNote, Screen, StubBadge } from "@/co
 import { engineConfigured } from "@/lib/engine";
 
 export function Welcome({
-  onStart, onUseFile,
+  onStart, onUseFile, onManual,
 }: {
   onStart: (heightCm: number) => void;
   onUseFile: (heightCm: number, clip: File) => void;
+  onManual: (heightCm: number) => void;
 }) {
   const [height, setHeight] = useState(174);
   const file = useRef<HTMLInputElement>(null);
@@ -16,7 +17,7 @@ export function Welcome({
 
   return (
     <Screen>
-      <Body>
+      <Body className="flex flex-col">
         <div className="flex items-center justify-between pt-7">
           <p className="text-[15px] font-bold tracking-[.22em] text-ink">
             SARTOR<span className="text-rust">IA</span>
@@ -24,14 +25,14 @@ export function Welcome({
           {!engineConfigured && <StubBadge />}
         </div>
 
-        <h1 className="pt-16 text-[33px] leading-[1.12] font-bold tracking-[-.02em]">
+        <h1 className="pt-10 text-[33px] leading-[1.12] font-bold tracking-[-.02em]">
           Your size,<br />from one video.
         </h1>
         <p className="pt-4 text-[14.5px] leading-[1.5] text-mute">
           Ten seconds of filming. No tape measure, no guessing between W30 and W32.
         </p>
 
-        <p className="eyebrow pt-12 pb-3">How tall are you?</p>
+        <p className="eyebrow pt-8 pb-3">How tall are you?</p>
         <div className="flex items-center justify-between rounded-2xl bg-white
                         px-6 py-5 shadow-[0_1px_2px_rgba(26,28,46,.06)]">
           <p className="figure text-[38px] font-semibold leading-none">
@@ -50,26 +51,28 @@ export function Welcome({
         </div>
         <div className="pt-3">
           <Note>
-            This is the only thing we ask you to type. It is what turns the video
-            into centimetres.
+            It is what turns the video into centimetres.
           </Note>
         </div>
-      </Body>
 
-      <Footer>
-        <Button onClick={() => onStart(height)}>Start filming</Button>
-        <div className="pt-2.5 text-center">
-          <button type="button" onClick={() => file.current?.click()}
-                  className="text-[12.5px] text-navy underline underline-offset-4
-                             hover:text-rust">
-            Or use a video you already have
-          </button>
+        {/* Three ways in, centred in whatever room is left. */}
+        <div className="flex flex-1 flex-col justify-center gap-3 py-8">
+          <Button onClick={() => onStart(height)}>Film a video</Button>
+          <Button variant="outline" onClick={() => file.current?.click()}>
+            Upload a video
+          </Button>
+          <Button variant="outline" onClick={() => onManual(height)}>
+            Enter measurements or size
+          </Button>
           <input ref={file} type="file" accept="video/*" className="hidden"
                  onChange={(e) => {
                    const f = e.target.files?.[0];
                    if (f) onUseFile(height, f);
                  }} />
         </div>
+      </Body>
+
+      <Footer>
         <PrivacyNote />
       </Footer>
     </Screen>

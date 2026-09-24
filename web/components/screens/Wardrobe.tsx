@@ -1,13 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Body, Button, Eyebrow, Footer, Note, Screen, Title } from "@/components/ui";
 import { PRODUCTS } from "@/lib/catalog";
 import type { Product } from "@/lib/engine/types";
 
 export function Wardrobe({
-  onAnchor, onBack,
-}: { onAnchor: (p: Product, size: string) => void; onBack: () => void }) {
+  onAnchor, onBack, switcher,
+}: {
+  onAnchor: (p: Product, size: string) => void; onBack: () => void; switcher?: ReactNode;
+}) {
   const [product, setProduct] = useState<Product | null>(null);
   const [size, setSize] = useState<string | null>(null);
 
@@ -19,11 +21,13 @@ export function Wardrobe({
           ← Back
         </button>
 
+        {switcher}
+
         <Eyebrow>No camera needed</Eyebrow>
         <Title>Which pair that you own fits you best?</Title>
         <p className="pt-3.5 text-[14px] leading-[1.5] text-mute">
-          Nobody knows their waist in centimetres. Everybody knows which jeans
-          they reach for first.
+          No tape measure to hand? Everybody knows which jeans they reach for
+          first.
         </p>
 
         <p className="eyebrow pt-8 pb-2.5">The pair</p>
