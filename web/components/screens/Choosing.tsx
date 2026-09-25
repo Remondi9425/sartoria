@@ -16,10 +16,10 @@ import type { DigitalTwin, Product } from "@/lib/engine/types";
  * only ever reorders: it cannot change a size, and it cannot hide a pair.
  */
 export function Choosing({
-  twin, needs, onPick, onEdit, logoHidden = false,
+  twin, needs, onPick, onEdit,
 }: {
   twin: DigitalTwin; needs: Need[];
-  onPick: (p: Product) => void; onEdit: () => void; logoHidden?: boolean;
+  onPick: (p: Product) => void; onEdit: () => void;
 }) {
   const rows = useMemo(
     () => rankByNeeds(PRODUCTS, needs)
@@ -28,7 +28,7 @@ export function Choosing({
 
   return (
     <Screen>
-      <CornerLogo hidden={logoHidden} />
+      <CornerLogo />
       <Body className="!px-6 pb-5">
         <BackLink onClick={onEdit}>← Edit the ticket</BackLink>
         <Eyebrow>{PRODUCTS.length} charts · read against your numbers</Eyebrow>
