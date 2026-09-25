@@ -109,78 +109,61 @@ export function TypingDots() {
   );
 }
 
-/** The wordmark: "sart", a sewn button for the "o", "ria". */
+/**
+ * The scissors that stand in for the "t": blades up, handles down, crossed
+ * by the letter's bar at x-height.
+ *
+ * Drawn in units of 1/100 em with the baseline at y = 92, so it sits on the
+ * line of the serif text around it at any size. `bar` is off where the
+ * scissors stand alone, as the icon.
+ */
+export function Scissors({ bar = true, className = "", style }: {
+  bar?: boolean; className?: string; style?: React.CSSProperties;
+}) {
+  return (
+    // Alone, the view is cropped to the drawing so it centres in a tile.
+    <svg viewBox={bar ? "0 0 38 112" : "0 14 38 97"} className={className} style={style}
+         fill="none" stroke="currentColor" aria-hidden="true">
+      {/* blades, meeting at the pivot */}
+      <path d="M17.8 71 L12.9 17 L16.6 19 L21.6 65.5 Z" fill="currentColor" stroke="none" />
+      <path d="M20.4 71 L26.6 17 L22.9 19 L16.8 65.5 Z" fill="currentColor" stroke="none" />
+      {/* shanks, down to the rings */}
+      <path d="M18.4 70 C 17.6 75, 14 78, 11.6 81.6" strokeWidth="2.6" strokeLinecap="round" />
+      <path d="M19.8 70 C 20.6 75, 23 78, 24.6 81.6" strokeWidth="2.6" strokeLinecap="round" />
+      {/* finger rings */}
+      <ellipse cx="9.4" cy="95" rx="5.6" ry="13.6" strokeWidth="2.7" transform="rotate(8 9.4 95)" />
+      <ellipse cx="26.2" cy="95" rx="6.4" ry="12.8" strokeWidth="2.7" transform="rotate(-6 26.2 95)" />
+      {/* the screw */}
+      <circle cx="19.1" cy="69" r="1.9" fill="var(--color-ground)" strokeWidth="1.3" />
+      {bar && <path d="M4.5 48 H37" strokeWidth="2.6" />}
+    </svg>
+  );
+}
+
+/** The wordmark: "sar", scissors for the "t", "oria". */
 export function Wordmark({ size = 30 }: { size?: number }) {
-  const d = Math.round(size * 0.46);
-  const hole = Math.max(2, Math.round(d * 0.2));
-  const at = [Math.round(d * 0.25), Math.round(d * 0.55)];
-  const cross = size >= 48;
-  const bar = Math.round(14 * size / 64);
   return (
     <p className="m-0 whitespace-nowrap font-serif font-normal text-chalk"
-       style={{ fontSize: size, lineHeight: 1 }} aria-label="SartorIA">
-      <span aria-hidden="true">sart</span>
-      <span aria-hidden="true"
-            className="relative inline-block rounded-full bg-amber"
-            style={{ width: d, height: d, margin: "0 1px", verticalAlign: 0 }}>
-        {at.flatMap((top) => at.map((left) => (
-          <span key={`${left}-${top}`} className="absolute rounded-full bg-ground"
-                style={{ left, top, width: hole, height: hole }} />
-        )))}
-        {cross && [45, -45].map((r) => (
-          <span key={r} className="absolute bg-chalk"
-                style={{ left: "50%", top: "50%", width: bar, height: 2,
-                         transform: `translate(-50%,-50%) rotate(${r}deg)` }} />
-        ))}
-      </span>
-      <span aria-hidden="true">ria</span>
+       style={{ fontSize: size, lineHeight: 1 }} aria-label="sartoria">
+      <span aria-hidden="true">sar</span>
+      <Scissors className="inline-block"
+                style={{ height: "1.12em", width: "0.38em", verticalAlign: "-0.2em",
+                         margin: "0 0.01em" }} />
+      <span aria-hidden="true">oria</span>
     </p>
   );
 }
 
-/** The needle, as drawn in the icon. */
-export function Needle({ length, plain = false, style }: {
-  length: number; plain?: boolean; style?: React.CSSProperties;
-}) {
+/** The icon: the scissors alone, on a dark tile. Shown wherever the wordmark
+ *  is not. */
+export function Logo({ size = 34 }: { size?: number }) {
   return (
-    <span className="absolute block bg-amber"
-          style={{
-            width: plain ? 2 : 3, height: length,
-            clipPath: plain ? undefined : "polygon(0 0,100% 0,100% 88%,50% 100%,0 88%)",
-            ...style,
-          }}>
-      {!plain && (
-        <span className="absolute bg-ground-deep"
-              style={{ left: 1, top: 3, width: 1, height: 5 }} />
-      )}
-    </span>
-  );
-}
-
-/**
- * The icon: an italic S crossed by a needle, on a dark tile. Shown wherever
- * the wordmark is not.
- */
-export function Logo({ size = 34, needle = true }: { size?: number; needle?: boolean }) {
-  const L = Math.round(size * 0.92);
-  const plain = size <= 24;
-  return (
-    <div className="relative flex-none overflow-hidden bg-ground-deep"
+    <div className="relative grid flex-none place-content-center overflow-hidden
+                    bg-ground-deep text-chalk"
          style={{ width: size, height: size, borderRadius: Math.round(size / 4),
                   outline: "1px solid rgba(240,231,217,.12)" }}
-         role="img" aria-label="SartorIA">
-      <span className="absolute inset-0 grid place-content-center">
-        <span className="font-serif italic text-chalk"
-              style={{ fontSize: Math.round(size * 0.88), lineHeight: 1,
-                       transform: "translateY(-1px)" }}>
-          S
-        </span>
-      </span>
-      {needle && (
-        <Needle length={L} plain={plain}
-                style={{ left: "50%", top: "50%",
-                         transform: "translate(-50%,-50%) rotate(32deg)" }} />
-      )}
+         role="img" aria-label="sartoria">
+      <Scissors bar={false} style={{ height: size * 0.8, width: size * 0.8 * 38 / 97 }} />
     </div>
   );
 }

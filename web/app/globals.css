@@ -11,7 +11,7 @@
   --color-chalk: #f0e7d9;       /* primary text; primary button fill; ticket paper */
   --color-mute: #a89f92;        /* secondary text */
   --color-faint: #7a7268;       /* notes, eyebrows */
-  --color-amber: #e0a458;       /* the one accent (logo, needle, reasons, progress) */
+  --color-amber: #e0a458;       /* the one accent (reasons, progress, the scan) */
   --color-rust: #d9795a;        /* recording dot */
   --color-ticket-ink: #1b1916;  /* text on the ticket */
   --color-ticket-accent: #b5582f; /* current row + READY TO CUT stamp on ticket */
