@@ -1,8 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
   <rect width="64" height="64" rx="16" fill="#141210"/>
-  <g transform="translate(32 32) scale(0.52) translate(-19.5 -62.5)" fill="none" stroke="#f0e7d9">
-    <path d="M17.8 71 L12.9 17 L16.6 19 L21.6 65.5 Z" fill="#f0e7d9" stroke="none"/>
-    <path d="M20.4 71 L26.6 17 L22.9 19 L16.8 65.5 Z" fill="#f0e7d9" stroke="none"/>
+  <g transform="translate(32 32) scale(0.52) translate(-19.5 -62.5)" fill="none" stroke="#e0a458">
+    <path d="M17.8 71 L12.9 17 L16.6 19 L21.6 65.5 Z" fill="#e0a458" stroke="none"/>
+    <path d="M20.4 71 L26.6 17 L22.9 19 L16.8 65.5 Z" fill="#e0a458" stroke="none"/>
     <path d="M18.4 70 C 17.6 75, 14 78, 11.6 81.6" stroke-width="3.2" stroke-linecap="round"/>
     <path d="M19.8 70 C 20.6 75, 23 78, 24.6 81.6" stroke-width="3.2" stroke-linecap="round"/>
     <ellipse cx="9.4" cy="95" rx="5.6" ry="13.6" stroke-width="3.4" transform="rotate(8 9.4 95)"/>
