@@ -148,3 +148,26 @@ export function rankByNeeds<T extends Product>(
     .sort((a, b) => (b.score - a.score) || (a.i - b.i))
     .map(({ product, score, reasons }) => ({ product, score, reasons }));
 }
+
+/** More pairs than this level at the top and the ticket has not chosen. */
+export const MAX_PICKS = 3;
+
+/**
+ * The pairs to name first, if the ticket earns any.
+ *
+ * Only pairs that fit (`sized`), that the ticket actually moved up (a reason
+ * to show), and that no other fitting pair beats. Pairs level at the top are
+ * named together: picking the first of two equal pairs would be the
+ * catalogue's order speaking, not the customer's ticket. More than
+ * `MAX_PICKS` level and the ticket has not narrowed anything, so none is named.
+ */
+export function topPicks<T extends Scored>(
+  ranked: T[], sized: (row: T) => boolean,
+): T[] {
+  const fitting = ranked.filter(sized);
+  const best = fitting[0]?.score ?? 0;
+  if (best <= 0) return [];
+  const level = fitting.filter((r) => r.score === best && r.reasons.length > 0);
+  return level.length <= MAX_PICKS && level.length === fitting.filter((r) => r.score === best).length
+    ? level : [];
+}
