@@ -111,7 +111,8 @@ export function TypingDots() {
 
 /**
  * The scissors that stand in for the "t": blades up, handles down, crossed
- * by the letter's bar at x-height.
+ * by the letter's bar at x-height. The scissors are amber, the one accent;
+ * the bar belongs to the lettering and takes its colour.
  *
  * Drawn in units of 1/100 em with the baseline at y = 92, so it sits on the
  * line of the serif text around it at any size. `bar` is off where the
@@ -124,18 +125,21 @@ export function Scissors({ bar = true, className = "", style }: {
     // Alone, the view is cropped to the drawing so it centres in a tile.
     <svg viewBox={bar ? "0 0 38 112" : "0 14 38 97"} className={className} style={style}
          fill="none" stroke="currentColor" aria-hidden="true">
-      {/* blades, meeting at the pivot */}
-      <path d="M17.8 71 L12.9 17 L16.6 19 L21.6 65.5 Z" fill="currentColor" stroke="none" />
-      <path d="M20.4 71 L26.6 17 L22.9 19 L16.8 65.5 Z" fill="currentColor" stroke="none" />
-      {/* shanks, down to the rings */}
-      <path d="M18.4 70 C 17.6 75, 14 78, 11.6 81.6" strokeWidth="2.6" strokeLinecap="round" />
-      <path d="M19.8 70 C 20.6 75, 23 78, 24.6 81.6" strokeWidth="2.6" strokeLinecap="round" />
-      {/* finger rings */}
-      <ellipse cx="9.4" cy="95" rx="5.6" ry="13.6" strokeWidth="2.7" transform="rotate(8 9.4 95)" />
-      <ellipse cx="26.2" cy="95" rx="6.4" ry="12.8" strokeWidth="2.7" transform="rotate(-6 26.2 95)" />
-      {/* the screw */}
-      <circle cx="19.1" cy="69" r="1.9" fill="var(--color-ground)" strokeWidth="1.3" />
+      {/* the letter's bar, behind the blades */}
       {bar && <path d="M4.5 48 H37" strokeWidth="2.6" />}
+      <g className="text-amber">
+        {/* blades, meeting at the pivot */}
+        <path d="M17.8 71 L12.9 17 L16.6 19 L21.6 65.5 Z" fill="currentColor" stroke="none" />
+        <path d="M20.4 71 L26.6 17 L22.9 19 L16.8 65.5 Z" fill="currentColor" stroke="none" />
+        {/* shanks, down to the rings */}
+        <path d="M18.4 70 C 17.6 75, 14 78, 11.6 81.6" strokeWidth="2.6" strokeLinecap="round" />
+        <path d="M19.8 70 C 20.6 75, 23 78, 24.6 81.6" strokeWidth="2.6" strokeLinecap="round" />
+        {/* finger rings */}
+        <ellipse cx="9.4" cy="95" rx="5.6" ry="13.6" strokeWidth="2.7" transform="rotate(8 9.4 95)" />
+        <ellipse cx="26.2" cy="95" rx="6.4" ry="12.8" strokeWidth="2.7" transform="rotate(-6 26.2 95)" />
+        {/* the screw */}
+        <circle cx="19.1" cy="69" r="1.9" fill="var(--color-ground)" strokeWidth="1.3" />
+      </g>
     </svg>
   );
 }
