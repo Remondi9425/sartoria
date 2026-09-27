@@ -12,15 +12,15 @@ import type {
 } from "./types";
 
 /** Hem difference worth mentioning at all, in cm. */
-const HEM_TOLERANCE_CM = 0.9;
+export const HEM_TOLERANCE_CM = 0.9;
 /** A narrow cut is flagged at the thigh before the seat itself reads snug. */
-const THIGH_HINT_BAND = 0.6;
+export const THIGH_HINT_BAND = 0.6;
 /** Sitting this far into the top of a range reads as snug rather than fine. */
 const SNUG_BAND = 0.8;
 const ROOMY_BAND = 0.28;
 
 /** Body measurements a garment-flat chart is cut for. */
-function toBodyRange(row: SizeRow, chart: SizeChart): SizeRow {
+export function toBodyRange(row: SizeRow, chart: SizeChart): SizeRow {
   if (chart.kind === "body") return row;
   return {
     ...row,
@@ -32,12 +32,12 @@ function toBodyRange(row: SizeRow, chart: SizeChart): SizeRow {
 }
 
 /** Where in a range a value sits: 0 at the bottom edge, 1 at the top. */
-function position(value: number, [lo, hi]: [number, number]): number {
+export function position(value: number, [lo, hi]: [number, number]): number {
   if (hi <= lo) return 0.5;
   return (value - lo) / (hi - lo);
 }
 
-function verdictFor(p: number): AreaNote["verdict"] {
+export function verdictFor(p: number): AreaNote["verdict"] {
   if (p >= SNUG_BAND) return "snug";
   if (p <= ROOMY_BAND) return "roomy";
   return "good";

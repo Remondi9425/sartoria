@@ -184,7 +184,7 @@ export default function App() {
       )}
 
       {step === "product" && twin && product && (
-        <ProductScreen product={product} twin={twin}
+        <ProductScreen key={product.id} product={product} twin={twin}
                        onBack={() => setStep("choosing")}
                        onBuy={(c) => { setColourId(c); setStep("checkout"); }} />
       )}
