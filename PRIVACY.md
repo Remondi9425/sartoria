@@ -49,6 +49,17 @@ to be matched to an option, then discarded. Nothing else is sent with it — no
 measurements, size or earlier answers — and the route neither logs nor stores
 it. Without `ANTHROPIC_API_KEY` the route is off and the typed words are
 written on the ticket as they are.
+
+The Fit Advisor runs only when the customer opens "Why this size?" on a pair.
+The browser then sends `/api/advisor` the pair's ID, the waist, seat and inseam
+in centimetres, how far each was trusted, and whether they came from a video,
+typed entry, a pair already owned or the demo. The server recomputes the size
+and sends those numbers, and facts derived from them for this one pair, to
+Anthropic's API to write the explanation. No video, height, ticket, other
+measurements or identifier is sent. The route neither logs nor stores the
+numbers, and does not return which check failed, since a reason can quote them.
+Without `ANTHROPIC_API_KEY` the route is off and the screen shows only the
+calculator's own sentences.
 Marketing consent is separate and optional. The subscription endpoint currently
 returns 503 because no store is implemented; it does not claim a successful signup.
 Adding persistence requires a retention period, deletion path and updated notices.

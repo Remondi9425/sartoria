@@ -5,12 +5,18 @@ import { Jeans } from "@/components/art/Jeans";
 import { Body, Button, CornerLogo, Footer, Screen, euro } from "@/components/ui";
 import { calculator } from "@/lib/engine";
 import type { AreaNote, DigitalTwin, Product as P } from "@/lib/engine/types";
+import { advisorRequest, type AdvisorReply } from "@/lib/fitAdvisor/request";
 
 const CHIP: Record<AreaNote["verdict"], string> = {
   good: "bg-chalk/10 text-chalk/80",
   snug: "bg-amber/20 text-amber",
   roomy: "bg-chalk/10 text-chalk/80",
 };
+
+/** The Fit Advisor's paragraph: asked for once, when the reasoning is opened. */
+type Advice =
+  | { state: "idle" | "loading" | "off" }
+  | { state: "ok"; reply: AdvisorReply };
 
 function chipLabel(a: AreaNote) {
   if (a.detail) return `${a.area} ${a.detail}`;
@@ -22,7 +28,32 @@ export function Product({
 }: { product: P; twin: DigitalTwin; onBuy: (colourId: string) => void; onBack: () => void }) {
   const [colour, setColour] = useState(product.colours[0]);
   const [why, setWhy] = useState(false);
+  const [advice, setAdvice] = useState<Advice>({ state: "idle" });
   const fit = calculator.recommend(twin, product);
+
+  // The fixed sentences below are the calculator's own and always shown; the
+  // advisor's paragraph sits above them only when it arrived and checked out.
+  async function askAdvisor() {
+    setAdvice({ state: "loading" });
+    try {
+      const res = await fetch("/api/advisor", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(advisorRequest(twin, product)),
+      });
+      if (!res.ok) throw new Error(String(res.status));
+      const reply = (await res.json()) as AdvisorReply;
+      if (typeof reply.explanation !== "string" || !reply.explanation) throw new Error("empty");
+      setAdvice({ state: "ok", reply });
+    } catch {
+      setAdvice({ state: "off" });
+    }
+  }
+
+  function toggleWhy() {
+    if (!why && advice.state === "idle") void askAdvisor();
+    setWhy(!why);
+  }
 
   return (
     <Screen>
@@ -103,6 +134,19 @@ export function Product({
           {why && (
             <div className="mt-4 space-y-1.5 border-t border-chalk/14 pt-4
                             text-[11.5px] leading-[1.55] text-mute">
+              {advice.state === "loading" && (
+                <p className="pb-1.5 text-chalk/70" aria-live="polite">The tailor is checking the numbers…</p>
+              )}
+              {advice.state === "ok" && (
+                <div className="pb-2.5" aria-live="polite">
+                  <p className="text-[13px] leading-[1.6] text-chalk">{advice.reply.explanation}</p>
+                  <p className="figure pt-1.5 text-[10px] text-faint">
+                    {advice.reply.demo
+                      ? "Fit advisor demo · template sentences, not written by AI · figures checked"
+                      : "Fit advisor · every figure checked against the calculator"}
+                  </p>
+                </div>
+              )}
               <p>
                 Their chart is a{" "}
                 <span className="text-chalk">
@@ -129,7 +173,7 @@ export function Product({
           Add to bag
         </Button>
         <div className="pt-2.5 text-center">
-          <button type="button" onClick={() => setWhy((w) => !w)}
+          <button type="button" onClick={toggleWhy}
                   className="text-[12.5px] text-chalk underline underline-offset-4 hover:text-amber">
             {why ? "Hide the reasoning" : "Why this size?"}
           </button>
