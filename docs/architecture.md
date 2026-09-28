@@ -11,9 +11,9 @@ deterministic tools — `run_fit_engine` (the same calculator), `check_size`,
 `pair_details`, `measurement_sources` — and writes a short explanation. The
 paragraph is shown only if it names the calculator's size and every number and
 size label in it came back from one of those tool calls (`verify.ts`); otherwise
-the screen keeps the calculator's fixed sentences. With `FIT_ADVISOR_DEMO=1` and
-no key, a template stand-in (`demo.ts`) plays the model's part in the same loop,
-through the same check, and the screen labels it as not written by AI.
+the screen keeps the calculator's fixed sentences. A paragraph that is shown is
+labelled "Suggested by AI". The advisor needs `ANTHROPIC_API_KEY`; without it
+the route returns 503 and only the fixed sentences appear.
 
 The real measurement path has four layers:
 

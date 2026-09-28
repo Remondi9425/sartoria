@@ -140,10 +140,9 @@ export function Product({
               {advice.state === "ok" && (
                 <div className="pb-2.5" aria-live="polite">
                   <p className="text-[13px] leading-[1.6] text-chalk">{advice.reply.explanation}</p>
-                  <p className="figure pt-1.5 text-[10px] text-faint">
-                    {advice.reply.demo
-                      ? "Fit advisor demo · template sentences, not written by AI · figures checked"
-                      : "Fit advisor · every figure checked against the calculator"}
+                  {/* Written by a model: it says so, small but legible. */}
+                  <p className="pt-1.5 text-[11px] text-mute">
+                    Suggested by AI · every figure checked against the calculator
                   </p>
                 </div>
               )}

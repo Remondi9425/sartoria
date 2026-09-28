@@ -203,23 +203,3 @@ test("an agent that never stops calling tools is cut off", async () => {
   assert.equal(out.ok, false);
   assert.equal(seen.length, MAX_TURNS + 1);
 });
-
-// ── the demo stand-in ───────────────────────────────────────────────────────
-
-test("the demo stand-in's paragraphs pass the same check, on every pair", async () => {
-  const { demoCreate } = await import("../lib/fitAdvisor/demo");
-  let shown = 0;
-  for (const p of PRODUCTS) {
-    for (const waist of [60, 70, 76, 82, 88, 96, 99.5, 100, 130]) {
-      for (const inseam of [70, 81, 100]) {
-        const twin = referenceTwin({ waist, hip: waist + 15, inseam });
-        twin.processing_method = waist === 100 ? "manual_entry_v1" : "stub_v0";
-        if (inseam === 70) twin.measurement_confidence.hip = "low";
-        const out = await runFitAdvisor(demoCreate, twin, p);
-        assert.equal(out.ok, true, `${p.id} waist ${waist} inseam ${inseam}: ${JSON.stringify(out)}`);
-        if (out.ok) shown++;
-      }
-    }
-  }
-  assert.ok(shown > 0);
-});

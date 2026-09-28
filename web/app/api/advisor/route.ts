@@ -8,8 +8,8 @@
  * from those numbers, so the size the advisor explains is the calculator's and
  * not whatever a client claims.
  *
- * With FIT_ADVISOR_DEMO=1 and no key, a template stand-in plays the model's
- * part (`lib/fitAdvisor/demo.ts`) and nothing leaves the server.
+ * It needs ANTHROPIC_API_KEY, read server-side from the environment (e.g.
+ * web/.env.local, never committed). There is no stand-in for the model.
  *
  * Nothing is kept. The numbers are not logged and not stored; they go to
  * Anthropic's API for the length of one explanation and are discarded. Without
@@ -20,7 +20,6 @@ import { NextResponse, type NextRequest } from "next/server";
 import { productById } from "@/lib/catalog";
 import type { Confidence, DigitalTwin } from "@/lib/engine/types";
 import { runFitAdvisor, type CreateMessage } from "@/lib/fitAdvisor/agent";
-import { demoCreate } from "@/lib/fitAdvisor/demo";
 import { METHODS } from "@/lib/fitAdvisor/request";
 
 export const runtime = "nodejs";
@@ -84,10 +83,8 @@ function twinFrom(b: Record<string, unknown>): DigitalTwin | null {
 }
 
 export async function POST(req: NextRequest) {
-  // A real key always wins; the demo stand-in only fills in for a missing one.
-  const demo = !process.env.ANTHROPIC_API_KEY && process.env.FIT_ADVISOR_DEMO === "1";
-  if (!process.env.ANTHROPIC_API_KEY && !demo) {
-    return NextResponse.json({ error: "The fit advisor is offline in this demo." },
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return NextResponse.json({ error: "The fit advisor needs ANTHROPIC_API_KEY on the server." },
                              { status: 503, headers: noStore });
   }
   if (tooMany(req)) {
@@ -112,10 +109,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Nothing to explain." }, { status: 400, headers: noStore });
   }
 
-  const create: CreateMessage = demo ? demoCreate : (() => {
-    const client = new Anthropic({ timeout: TIMEOUT_MS, maxRetries: 0 });
-    return (p) => client.beta.messages.create(p);
-  })();
+  const client = new Anthropic({ timeout: TIMEOUT_MS, maxRetries: 0 });
+  const create: CreateMessage = (p) => client.beta.messages.create(p);
   try {
     const result = await runFitAdvisor(create, twin, product);
     if (!result.ok) {
@@ -123,7 +118,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "The advisor's explanation did not check out." },
                                { status: 502, headers: noStore });
     }
-    return NextResponse.json({ explanation: result.explanation, steps: result.steps, demo },
+    return NextResponse.json({ explanation: result.explanation, steps: result.steps },
                              { headers: noStore });
   } catch {
     // Deliberately not logged: the error could carry the customer's numbers.
