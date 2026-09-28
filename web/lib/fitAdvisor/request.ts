@@ -32,6 +32,4 @@ export function advisorRequest(twin: DigitalTwin, product: Product): AdvisorRequ
 export interface AdvisorReply {
   explanation: string;
   steps: string[];
-  /** True when the template stand-in wrote it, not a model. */
-  demo: boolean;
 }
