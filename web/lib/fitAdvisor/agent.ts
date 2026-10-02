@@ -23,6 +23,7 @@ import type { DigitalTwin, Product } from "../engine/types";
 import {
   comparableSizes, factsForSize, measurementSources, pairDetails, runEngine,
 } from "./facts";
+import { MODEL } from "../model";
 import { collect, emptyEvidence, verify, type Draft } from "./verify";
 
 type Beta = Anthropic.Beta.Messages.BetaMessage;
@@ -37,7 +38,7 @@ export type CreateMessage = (params: Params) => Promise<Beta>;
  *  two rounds. A third is slack; more is a loop, and every round is paid for. */
 export const MAX_TURNS = 3;
 
-export const MODEL = "claude-opus-5";
+export { MODEL } from "../model";
 
 const SYSTEM =
   "You are the fit advisor in a jeans shop. The size has already been chosen by a " +

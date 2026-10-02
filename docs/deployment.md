@@ -51,9 +51,9 @@ and keep the tailor.
 What bounds the cost:
 
 - One run: at most three rounds of tool calls before the answer, and only the
-  sizes near the chosen one are offered for comparison. Measured on the real
-  model, a run is two or three calls and about 5,500 input and 330 output
-  tokens.
+  sizes near the chosen one are offered for comparison. Measured on
+  `claude-opus-5-5` (`web/lib/model.ts`), a run is two or three calls and about
+  4,700 input and 320 output tokens, in about 7 seconds.
 - One page: an answer, or a failure, is kept in memory for the pair, so
   opening the same pair again does not run it again.
 - One instance: 20 runs per address per ten minutes and 200 runs per hour in
