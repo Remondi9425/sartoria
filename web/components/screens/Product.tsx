@@ -96,7 +96,10 @@ export function Product({
         <div className="mt-5 rounded-[18px] border border-chalk/8 bg-surface px-6 py-6 text-chalk">
           {fit.size ? (
             <>
-              <p className="figure text-[42px] font-semibold leading-none">{fit.size.split(" ")[0]}</p>
+              <p className="figure text-[42px] font-semibold leading-none">
+                {fit.size.split(" ")[0]}
+                <span className="pl-2 text-[22px] font-medium text-mute">{fit.size.split(" ")[1]}</span>
+              </p>
               <p className="pt-2 text-[13px] font-semibold text-amber">{fit.headline}</p>
               <div className="flex flex-wrap gap-1.5 pt-3.5">
                 {fit.areas.map((a) => (
@@ -109,8 +112,8 @@ export function Product({
               {fit.length_confidence === "low" && (
                 <p className="pt-3 text-[11.5px] leading-[1.5] text-amber">
                   We could not read your inseam well enough from that video to
-                  say whether these need turning up. Try them on before you cut
-                  anything.
+                  choose the length, so this is the regular one. Try them on
+                  before you cut anything.
                 </p>
               )}
               {fit.confidence === "medium" && (

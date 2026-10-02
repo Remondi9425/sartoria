@@ -7,7 +7,7 @@
  * phrase the explanation; it never picks the number.
  */
 import type {
-  AreaNote, DigitalTwin, FitRecommendation,
+  AreaNote, Confidence, DigitalTwin, FitRecommendation,
   MeasurementSite, Product, SizeChart, SizeRow,
 } from "./types";
 
@@ -43,6 +43,42 @@ export function verdictFor(p: number): AreaNote["verdict"] {
   return "good";
 }
 
+/** The inseam a chart's regular length is cut in, in cm: L32. */
+const REGULAR_INSEAM_CM = 81.5;
+
+interface WaistBand {
+  waist_cm: [number, number];
+  /** The same waist in every length the pair is cut in. */
+  rows: SizeRow[];
+}
+
+/** A chart lists each waist once per length. Grouped back into one band per
+ *  waist, lowest first, so the waist can be chosen before the length. */
+function waistBands(rows: SizeRow[]): WaistBand[] {
+  const bands: WaistBand[] = [];
+  for (const r of rows) {
+    const b = bands.find((x) =>
+      x.waist_cm[0] === r.waist_cm[0] && x.waist_cm[1] === r.waist_cm[1]);
+    if (b) b.rows.push(r);
+    else bands.push({ waist_cm: r.waist_cm, rows: [r] });
+  }
+  return bands.sort((a, b) => a.waist_cm[0] - b.waist_cm[0]);
+}
+
+/**
+ * The length to offer within one waist: the one nearest the inseam, and the
+ * longer of two equally near, since a hem can be turned up but not let down.
+ * An inseam we could not read well picks nothing; the regular length is
+ * offered instead, and the screen says the length is unchecked.
+ */
+function lengthFor(rows: SizeRow[], inseam: number, confidence: Confidence): SizeRow {
+  const target = confidence === "low" ? REGULAR_INSEAM_CM : inseam;
+  return rows.reduce((best, r) => {
+    const d = Math.abs(r.inseam_cm - target), dBest = Math.abs(best.inseam_cm - target);
+    return d < dBest || (d === dBest && r.inseam_cm > best.inseam_cm) ? r : best;
+  });
+}
+
 export const sizeCalculator = {
   recommend(twin: DigitalTwin, product: Product): FitRecommendation {
     const used: MeasurementSite[] = ["waist", "hip", "inseam"];
@@ -56,40 +92,43 @@ export const sizeCalculator = {
     const lengthConf = twin.measurement_confidence.inseam;
 
     const rows = product.chart.rows.map((r) => toBodyRange(r, product.chart));
+    const bands = waistBands(rows);
 
     // The waist is what binds on a pair of jeans; the hip only breaks ties.
     // Ranges are half-open so a body on a boundary belongs to exactly one size —
     // closed ranges put 82 cm in both W30 [78,82] and W31 [82,86] at once, and
     // the tie was then broken by array order, which is not a reason.
-    const fits = rows.filter((r, i) =>
-      m.waist >= r.waist_cm[0] &&
-      (i === rows.length - 1 ? m.waist <= r.waist_cm[1] : m.waist < r.waist_cm[1]));
+    const fits = bands.filter((b, i) =>
+      m.waist >= b.waist_cm[0] &&
+      (i === bands.length - 1 ? m.waist <= b.waist_cm[1] : m.waist < b.waist_cm[1]));
 
     // Refusing is a real answer. A system that always has an opinion is lying
     // about its confidence.
     if (fits.length === 0 || twin.measurement_confidence.waist === "low") {
-      const nearest = rows.reduce((best, r) => {
-        const d = Math.min(Math.abs(m.waist - r.waist_cm[0]),
-                           Math.abs(m.waist - r.waist_cm[1]));
-        return d < best.d ? { d, r } : best;
-      }, { d: Infinity, r: rows[0] });
+      const nearest = bands.reduce((best, b) => {
+        const d = Math.min(Math.abs(m.waist - b.waist_cm[0]),
+                           Math.abs(m.waist - b.waist_cm[1]));
+        return d < best.d ? { d, b } : best;
+      }, { d: Infinity, b: bands[0] });
       return {
         size: null,
         headline: fits.length === 0
           ? "Your waist falls outside this brand's chart"
           : "We are not sure enough to call this one",
         areas: [],
-        alternative: nearest.r?.label ?? null,
+        alternative: nearest.b ? lengthFor(nearest.b.rows, m.inseam, lengthConf).label : null,
         confidence: "low",
         length_confidence: lengthConf,
         used,
       };
     }
 
-    // Among the rows that fit, prefer the one the body sits most centrally in.
-    const chosen = fits.reduce((best, r) =>
-      Math.abs(position(m.waist, r.waist_cm) - 0.5) <
-      Math.abs(position(m.waist, best.waist_cm) - 0.5) ? r : best);
+    // Among the bands that fit, prefer the one the body sits most centrally in.
+    const band = fits.reduce((best, b) =>
+      Math.abs(position(m.waist, b.waist_cm) - 0.5) <
+      Math.abs(position(m.waist, best.waist_cm) - 0.5) ? b : best);
+    // The waist chose the size; the inseam chooses the length within it.
+    const chosen = lengthFor(band.rows, m.inseam, lengthConf);
 
     const pWaist = position(m.waist, chosen.waist_cm);
     const pHip = position(m.hip, chosen.hip_cm);
@@ -123,10 +162,12 @@ export const sizeCalculator = {
     }
 
     // A neighbouring size is worth naming when the body is near an edge.
-    const idx = rows.indexOf(chosen);
-    const neighbour = pWaist >= SNUG_BAND ? rows[idx + 1]
-                    : pWaist <= ROOMY_BAND ? rows[idx - 1]
-                    : undefined;
+    // Named in the same length, so the only thing that changes is the waist.
+    const idx = bands.indexOf(band);
+    const next = pWaist >= SNUG_BAND ? bands[idx + 1]
+               : pWaist <= ROOMY_BAND ? bands[idx - 1]
+               : undefined;
+    const neighbour = next && lengthFor(next.rows, chosen.inseam_cm, "high");
 
     // The headline is about how it sits, so only the waist and the seat feed
     // it. A hem is a length to be turned up, not a fit problem, and letting it

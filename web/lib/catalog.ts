@@ -13,31 +13,70 @@
  * construction details — rise, fly, hand, label — which exist only so the
  * fitting ticket has something true-to-this-catalogue to reorder by. When the
  * Catalog Ingestor is real it will replace this file wholesale.
+ *
+ * Between them the pairs cover waists from W23 to W56 (about 57 to 144 cm of
+ * body) and legs from L26 to L38, as a real shop's range would. Each pair is
+ * cut in its own span of those, so a body at either end is sized by some
+ * pairs and honestly refused by others.
  */
-import type { Product, SizeChart } from "./engine/types";
+import type { Product, SizeChart, SizeRow } from "./engine/types";
+
+/** W and L count inches. */
+const INCH = 2.54;
+/** Chart edges are published to the half centimetre. */
+const half = (n: number) => Math.round(n * 2) / 2;
+
+interface Cut {
+  /** The waist sizes it is cut in, inclusive: [28, 44] is W28 to W44. */
+  waists: [number, number];
+  /** The leg lengths it is cut in, in inches: [30, 32, 34] is L30, L32, L34. */
+  lengths: number[];
+  /** How far this brand's W sits above a true inch, in cm. Positive is vanity
+   *  sizing: the label says less than the body it fits. */
+  vanity_cm: number;
+  /** How much fuller the seat is cut than the waist, in cm. A relaxed cut or a
+   *  curvier block has more; a cut for a fuller waist has less. */
+  seat_cm: number;
+}
+
+/** Where a waist size starts on the body, in cm. W32 starts at 31.5 inches. */
+function edge(w: number, cut: Cut): number {
+  return half((w - 0.5) * INCH + cut.vanity_cm);
+}
+
+/** Every waist in every length, as the body each row is meant to fit. */
+function rowsFor(cut: Cut): SizeRow[] {
+  const rows: SizeRow[] = [];
+  for (let w = cut.waists[0]; w <= cut.waists[1]; w++) {
+    const lo = edge(w, cut), hi = edge(w + 1, cut);
+    for (const l of cut.lengths) {
+      rows.push({
+        label: `W${w} L${l}`,
+        waist_cm: [lo, hi],
+        hip_cm: [lo + cut.seat_cm, hi + cut.seat_cm],
+        inseam_cm: half(l * INCH),
+      });
+    }
+  }
+  return rows;
+}
 
 /** A body chart: the sizes list the body they are meant to fit. */
-function bodyChart(start: number, inseam: number): SizeChart {
-  const rows = [];
-  for (let i = 0; i < 7; i++) {
-    const w = start + i * 4;              // waist band, cm
-    rows.push({
-      label: `W${28 + i} L32`,
-      waist_cm: [w, w + 4] as [number, number],
-      hip_cm: [w + 16, w + 20] as [number, number],
-      inseam_cm: inseam,
-    });
-  }
-  return { kind: "body", ease_cm: { waist: 0, hip: 0 }, rows };
+function bodyChart(cut: Cut): SizeChart {
+  return { kind: "body", ease_cm: { waist: 0, hip: 0 }, rows: rowsFor(cut) };
 }
 
 /** A flat chart: the sizes list the garment measured flat, so ease matters. */
-function flatChart(start: number, inseam: number): SizeChart {
-  const c = bodyChart(start + 2, inseam);
+function flatChart(cut: Cut): SizeChart {
+  const ease = { waist: -2, hip: -3 };
   return {
     kind: "flat",
-    ease_cm: { waist: -2, hip: -3 },
-    rows: c.rows,
+    ease_cm: ease,
+    rows: rowsFor(cut).map((r) => ({
+      ...r,
+      waist_cm: [r.waist_cm[0] - ease.waist, r.waist_cm[1] - ease.waist],
+      hip_cm: [r.hip_cm[0] - ease.hip, r.hip_cm[1] - ease.hip],
+    })),
   };
 }
 
@@ -53,7 +92,7 @@ export const PRODUCTS: Product[] = [
     price_eur: 129, composition: "98% cotton · 2% elastane",
     rise: "mid", fly: "zip", soft: false, tagless: true,
     colours: [INDIGO, LIGHT, DARK, BLACK],
-    chart: bodyChart(68, 82),
+    chart: bodyChart({ waists: [26, 40], lengths: [30, 32, 34], vanity_cm: 1, seat_cm: 17 }),
   },
   {
     id: "fosco-regular-straight",
@@ -61,7 +100,7 @@ export const PRODUCTS: Product[] = [
     price_eur: 119, composition: "100% cotton",
     rise: "mid", fly: "button", soft: false, tagless: false,
     colours: [LIGHT, INDIGO, DARK],
-    chart: flatChart(70, 81),
+    chart: flatChart({ waists: [28, 46], lengths: [30, 32, 34, 36], vanity_cm: 0, seat_cm: 18 }),
   },
   {
     id: "marea-relaxed-carpenter",
@@ -69,7 +108,7 @@ export const PRODUCTS: Product[] = [
     price_eur: 139, composition: "100% cotton",
     rise: "high", fly: "zip", soft: true, tagless: true,
     colours: [DARK, INDIGO],
-    chart: bodyChart(68, 80),
+    chart: bodyChart({ waists: [28, 48], lengths: [30, 32, 34], vanity_cm: 1, seat_cm: 21 }),
   },
   {
     id: "vela-tapered-crop",
@@ -77,7 +116,7 @@ export const PRODUCTS: Product[] = [
     price_eur: 109, composition: "97% cotton · 3% elastane",
     rise: "mid", fly: "zip", soft: false, tagless: false,
     colours: [BLACK, INDIGO, LIGHT],
-    chart: bodyChart(71, 76),
+    chart: bodyChart({ waists: [24, 38], lengths: [26, 28], vanity_cm: -1, seat_cm: 17 }),
   },
   {
     id: "nebbia-slim-stretch",
@@ -85,7 +124,7 @@ export const PRODUCTS: Product[] = [
     price_eur: 99, composition: "94% cotton · 5% polyester · 1% elastane",
     rise: "low", fly: "zip", soft: true, tagless: true,
     colours: [INDIGO, DARK],
-    chart: flatChart(71, 83),
+    chart: flatChart({ waists: [26, 38], lengths: [30, 32, 34], vanity_cm: 2, seat_cm: 15 }),
   },
   {
     id: "fosco-loose-taper",
@@ -93,7 +132,7 @@ export const PRODUCTS: Product[] = [
     price_eur: 129, composition: "100% cotton",
     rise: "high", fly: "zip", soft: true, tagless: false,
     colours: [LIGHT, BLACK],
-    chart: bodyChart(69, 79),
+    chart: bodyChart({ waists: [28, 50], lengths: [30, 32, 34], vanity_cm: 0.5, seat_cm: 21 }),
   },
   {
     id: "vela-straight-rigid",
@@ -101,7 +140,7 @@ export const PRODUCTS: Product[] = [
     price_eur: 149, composition: "100% cotton, unwashed",
     rise: "high", fly: "button", soft: false, tagless: false,
     colours: [DARK, INDIGO],
-    chart: bodyChart(72, 84),
+    chart: bodyChart({ waists: [27, 42], lengths: [30, 32, 34, 36], vanity_cm: -1.5, seat_cm: 18 }),
   },
   {
     id: "nebbia-easy-straight",
@@ -109,7 +148,71 @@ export const PRODUCTS: Product[] = [
     price_eur: 89, composition: "99% cotton · 1% elastane",
     rise: "mid", fly: "zip", soft: true, tagless: true,
     colours: [INDIGO, LIGHT, BLACK],
-    chart: flatChart(69, 80),
+    chart: flatChart({ waists: [28, 52], lengths: [28, 30, 32, 34], vanity_cm: 2, seat_cm: 19 }),
+  },
+  {
+    id: "marea-high-straight",
+    brand: "Marea Denim", name: "High Straight", fit: "straight",
+    price_eur: 125, composition: "99% cotton · 1% elastane",
+    rise: "high", fly: "button", soft: false, tagless: true,
+    colours: [LIGHT, INDIGO, BLACK],
+    chart: bodyChart({ waists: [23, 36], lengths: [28, 30, 32], vanity_cm: 1, seat_cm: 20 }),
+  },
+  {
+    id: "vela-high-skinny",
+    brand: "Vela", name: "High Skinny", fit: "slim",
+    price_eur: 95, composition: "92% cotton · 6% polyester · 2% elastane",
+    rise: "high", fly: "zip", soft: true, tagless: true,
+    colours: [BLACK, DARK, INDIGO],
+    chart: bodyChart({ waists: [23, 36], lengths: [28, 30, 32], vanity_cm: 0, seat_cm: 21 }),
+  },
+  {
+    id: "fosco-comfort-straight",
+    brand: "Fosco", name: "Comfort Straight", fit: "straight",
+    price_eur: 115, composition: "98% cotton · 2% elastane",
+    rise: "high", fly: "zip", soft: true, tagless: false,
+    colours: [INDIGO, DARK, BLACK],
+    chart: bodyChart({ waists: [32, 56], lengths: [28, 30, 32, 34], vanity_cm: 0, seat_cm: 16 }),
+  },
+  {
+    id: "fosco-slim-rigid",
+    brand: "Fosco", name: "Slim Rigid", fit: "slim",
+    price_eur: 135, composition: "100% cotton",
+    rise: "mid", fly: "button", soft: false, tagless: false,
+    colours: [DARK, BLACK],
+    chart: flatChart({ waists: [27, 40], lengths: [30, 32, 34, 36], vanity_cm: -1, seat_cm: 15 }),
+  },
+  {
+    id: "vela-relaxed-plus",
+    brand: "Vela", name: "Relaxed Plus", fit: "relaxed",
+    price_eur: 119, composition: "99% cotton · 1% elastane",
+    rise: "high", fly: "zip", soft: true, tagless: true,
+    colours: [INDIGO, DARK],
+    chart: bodyChart({ waists: [34, 56], lengths: [28, 30, 32, 34], vanity_cm: 1, seat_cm: 17 }),
+  },
+  {
+    id: "nebbia-work-tapered",
+    brand: "Nebbia", name: "Work Tapered", fit: "tapered",
+    price_eur: 105, composition: "100% cotton",
+    rise: "mid", fly: "zip", soft: false, tagless: false,
+    colours: [DARK, BLACK, INDIGO],
+    chart: flatChart({ waists: [28, 44], lengths: [30, 32, 34], vanity_cm: 0, seat_cm: 18 }),
+  },
+  {
+    id: "marea-wide-leg",
+    brand: "Marea Denim", name: "Wide Leg", fit: "relaxed",
+    price_eur: 145, composition: "100% cotton",
+    rise: "high", fly: "button", soft: true, tagless: false,
+    colours: [LIGHT, INDIGO],
+    chart: bodyChart({ waists: [24, 40], lengths: [28, 30, 32, 34], vanity_cm: 1.5, seat_cm: 22 }),
+  },
+  {
+    id: "nebbia-tall-straight",
+    brand: "Nebbia", name: "Tall Straight", fit: "straight",
+    price_eur: 109, composition: "99% cotton · 1% elastane",
+    rise: "mid", fly: "zip", soft: true, tagless: true,
+    colours: [INDIGO, DARK],
+    chart: bodyChart({ waists: [28, 44], lengths: [34, 36, 38], vanity_cm: 2, seat_cm: 18 }),
   },
 ];
 

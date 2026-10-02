@@ -9,21 +9,55 @@ import { referenceTwin } from "./fixtures";
 
 const marea = productById("marea-slim-tapered")!;
 
+const waistOf = (label: string) => label.split(" ")[0];
+
 test("a body on a size boundary belongs to exactly one size", () => {
-  // 82 cm sits on the edge of W30 [78,82] and W31 [82,86]. Closed ranges put it
-  // in both and the winner came down to array order.
+  // 83.5 cm sits on the edge of Marea's W32 [81,83.5] and W33 [83.5,86].
+  // Closed ranges put it in both and the winner came down to array order.
+  // A chart lists each waist once per length, so sizes are counted by waist.
   for (const p of PRODUCTS) {
-    for (let waist = 66; waist <= 100; waist += 0.5) {
-      const rows = p.chart.rows;
-      const hits = rows.filter((r, i) => {
+    const rows = p.chart.rows;
+    const last = waistOf(rows.at(-1)!.label);
+    for (let waist = 55; waist <= 150; waist += 0.5) {
+      const hits = new Set(rows.filter((r) => {
         const lo = r.waist_cm[0] + (p.chart.kind === "flat" ? p.chart.ease_cm.waist : 0);
         const hi = r.waist_cm[1] + (p.chart.kind === "flat" ? p.chart.ease_cm.waist : 0);
-        return waist >= lo && (i === rows.length - 1 ? waist <= hi : waist < hi);
-      });
-      assert.ok(hits.length <= 1,
-        `${p.id}: waist ${waist} matches ${hits.length} sizes`);
+        return waist >= lo && (waistOf(r.label) === last ? waist <= hi : waist < hi);
+      }).map((r) => waistOf(r.label)));
+      assert.ok(hits.size <= 1,
+        `${p.id}: waist ${waist} matches ${hits.size} sizes`);
     }
   }
+});
+
+test("every waist a person can type is sized by some pair", () => {
+  // Typed entry accepts 55–150 cm. Between 58 and 144 the shelf must have an
+  // answer; beyond that, refusing is honest.
+  for (let waist = 58; waist <= 144; waist += 0.5) {
+    const twin = referenceTwin({ waist, hip: waist + 17 });
+    assert.ok(PRODUCTS.some((p) => sizeCalculator.recommend(twin, p).size !== null),
+              `no pair sizes a ${waist} cm waist`);
+  }
+});
+
+test("the inseam picks the length, the waist the size", () => {
+  // Marea is cut in L30 (76 cm), L32 (81.5) and L34 (86.5).
+  assert.equal(sizeCalculator.recommend(referenceTwin({ inseam: 86 }), marea).size, "W32 L34");
+  assert.equal(sizeCalculator.recommend(referenceTwin({ inseam: 77 }), marea).size, "W32 L30");
+  assert.equal(sizeCalculator.recommend(referenceTwin({ inseam: 81 }), marea).size, "W32 L32");
+});
+
+test("between two lengths equally near, the longer one, which can be turned up", () => {
+  const between = (76 + 81.5) / 2;
+  assert.equal(sizeCalculator.recommend(referenceTwin({ inseam: between }), marea).size,
+               "W32 L32");
+});
+
+test("the next size along is named in the same length", () => {
+  // 83 cm sits at the top of Marea's W32 [81,83.5], so W33 is worth naming.
+  const fit = sizeCalculator.recommend(referenceTwin({ waist: 83, inseam: 86 }), marea);
+  assert.equal(fit.size, "W32 L34");
+  assert.equal(fit.alternative, "W33 L34");
 });
 
 test("the same body gets different sizes in different brands", () => {
@@ -35,7 +69,7 @@ test("the same body gets different sizes in different brands", () => {
 
 test("the reference body is true to size in the reference product", () => {
   const fit = sizeCalculator.recommend(referenceTwin(), marea);
-  assert.equal(fit.size, "W31 L32");
+  assert.equal(fit.size, "W32 L32");
   assert.equal(fit.headline, "True to size for you");
   const waist = fit.areas.find((a) => a.area === "waist");
   assert.equal(waist?.verdict, "good");
@@ -43,23 +77,25 @@ test("the reference body is true to size in the reference product", () => {
 
 test("the headline describes the fit, not the hem", () => {
   // A 6 cm hem difference must not turn a perfect waist into "a little room".
-  const long = sizeCalculator.recommend(referenceTwin({ inseam: 75 }), marea);
+  // Marea's shortest leg is L30, 76 cm.
+  const long = sizeCalculator.recommend(referenceTwin({ inseam: 70 }), marea);
   assert.equal(long.headline, "True to size for you");
   assert.ok(long.areas.some((a) => a.area === "hem"),
     "the hem should still be reported, just not in the headline");
 });
 
 test("hem sign says which way it is wrong", () => {
-  // Marea's W31 is cut for an 82 cm inseam.
-  const shortLegs = sizeCalculator.recommend(referenceTwin({ inseam: 76 }), marea);
+  // Past the lengths Marea is cut in: L30 is 76 cm, L34 is 86.5 cm.
+  const shortLegs = sizeCalculator.recommend(referenceTwin({ inseam: 70 }), marea);
   assert.equal(shortLegs.areas.find((a) => a.area === "hem")?.detail, "+6 cm");
-  const longLegs = sizeCalculator.recommend(referenceTwin({ inseam: 88 }), marea);
+  const longLegs = sizeCalculator.recommend(referenceTwin({ inseam: 92.5 }), marea);
   assert.equal(longLegs.areas.find((a) => a.area === "hem")?.detail, "−6 cm");
 });
 
 test("a garment-flat chart is not read as a body chart", () => {
   const flat = PRODUCTS.find((p) => p.chart.kind === "flat")!;
-  const twin = referenceTwin();
+  // 81 cm: W32 once the 2 cm of ease is taken off, W31 if it is not.
+  const twin = referenceTwin({ waist: 81 });
   const withEase = sizeCalculator.recommend(twin, flat);
   const asIfBody = sizeCalculator.recommend(twin, {
     ...flat, chart: { ...flat.chart, kind: "body" as const },
@@ -69,6 +105,7 @@ test("a garment-flat chart is not read as a body chart", () => {
 });
 
 test("it refuses rather than guesses when the waist is off the chart", () => {
+  // Marea's Slim Tapered stops at W40, about 104 cm.
   const huge = sizeCalculator.recommend(referenceTwin({ waist: 140 }), marea);
   assert.equal(huge.size, null);
   assert.equal(huge.confidence, "low");
@@ -98,7 +135,7 @@ test("a poorly-read seat does not lower the confidence of the size", () => {
   const twin = referenceTwin();
   twin.measurement_confidence.hip = "low";
   const fit = sizeCalculator.recommend(twin, marea);
-  assert.equal(fit.size, "W31 L32");
+  assert.equal(fit.size, "W32 L32");
   assert.equal(fit.confidence, "high", "the waist was high and it picks the size");
 });
 
@@ -112,11 +149,12 @@ test("a seat we could not read is not given a verdict", () => {
             "the thigh hint is derived from the seat, so it goes too");
 });
 
-test("a shaky inseam withholds the hem but keeps the size", () => {
+test("a shaky inseam withholds the hem, keeps the size, and offers the regular length", () => {
+  // 70 cm would pick L30 if it were trusted. It is not, so the length is L32.
   const twin = referenceTwin({ inseam: 70 });
   twin.measurement_confidence.inseam = "low";
   const fit = sizeCalculator.recommend(twin, marea);
-  assert.equal(fit.size, "W31 L32");
+  assert.equal(fit.size, "W32 L32");
   assert.equal(fit.length_confidence, "low");
   assert.ok(!fit.areas.some((a) => a.area === "hem"),
             "'+12 cm' reads as a fact and a low-confidence inseam cannot support one");
