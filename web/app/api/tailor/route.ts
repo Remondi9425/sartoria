@@ -16,6 +16,7 @@
  */
 import Anthropic from "@anthropic-ai/sdk";
 import { NextResponse, type NextRequest } from "next/server";
+import { MODEL } from "@/lib/model";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -99,7 +100,7 @@ export async function POST(req: NextRequest) {
   const client = new Anthropic({ timeout: TIMEOUT_MS, maxRetries: 0 });
   try {
     const msg = await client.beta.messages.create({
-      model: "claude-opus-5",
+      model: MODEL,
       max_tokens: 1024,
       betas: ["server-side-fallback-2026-07-01"],
       fallbacks: "default",

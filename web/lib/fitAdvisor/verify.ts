@@ -100,7 +100,8 @@ const isFacts = (v: object): v is SizeFacts => "size" in v && "waist" in v;
  * Add what one tool returned. The tools are known, so their outputs are read
  * by shape: a size's facts, the engine's run (which carries the chosen size's
  * facts and the size it names), the pair's details (its composition and the
- * sizes it is cut in), and the measurement sources (no figures).
+ * span of waists and lengths it is cut in), and the measurement sources (no
+ * figures).
  */
 export function collect(ev: Evidence, value: unknown): void {
   if (!value || typeof value !== "object") return;
@@ -119,7 +120,11 @@ export function collect(ev: Evidence, value: unknown): void {
       ev.facts.push({ size: null, area: "pair", quantity: "composition",
                       unit: "pct", value: Number(m[1].replace(",", ".")) });
     }
-    if (Array.isArray(v.sizes)) for (const s of v.sizes) if (typeof s === "string") addLabels(ev, s);
+    const span = typeof v.waists === "string" ? /^W(\d{2})–W(\d{2})$/.exec(v.waists) : null;
+    if (span) for (let w = Number(span[1]); w <= Number(span[2]); w++) ev.labels.add(`W${w}`);
+    if (Array.isArray(v.lengths)) {
+      for (const l of v.lengths) if (typeof l === "string" && /^L\d{2}$/.test(l)) ev.lengths.add(l);
+    }
   }
 }
 
