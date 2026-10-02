@@ -18,6 +18,25 @@ type Advice =
   | { state: "idle" | "loading" | "off" }
   | { state: "ok"; reply: AdvisorReply };
 
+/**
+ * Why a waist is only "medium", in terms of where it came from. Typed-in and
+ * read-back numbers are never described as coming from a video.
+ */
+function waistCaveat(method: DigitalTwin["processing_method"]): string {
+  if (method.startsWith("manual_entry")) {
+    return "You measured your waist yourself, and a tape held a little loose or " +
+      "tight moves it by a centimetre or two, so treat this as the likelier of " +
+      "two sizes rather than a certainty.";
+  }
+  if (method.startsWith("wardrobe_anchor")) {
+    return "Your waist was read back from a pair you own, and one size fits a " +
+      "range of waists, so treat this as the likelier of two sizes rather than " +
+      "a certainty.";
+  }
+  return "Your waist came out a little differently across the video, so treat " +
+    "this as the likelier of two sizes rather than a certainty.";
+}
+
 function chipLabel(a: AreaNote) {
   if (a.detail) return `${a.area} ${a.detail}`;
   return a.verdict === "good" ? `${a.area} ✓` : `${a.area} ${a.verdict}`;
@@ -118,9 +137,7 @@ export function Product({
               )}
               {fit.confidence === "medium" && (
                 <p className="pt-2 text-[11.5px] leading-[1.5] text-mute">
-                  Your waist came out a little differently across the video, so
-                  treat this as the likelier of two sizes rather than a
-                  certainty.
+                  {waistCaveat(twin.processing_method)}
                 </p>
               )}
             </>
