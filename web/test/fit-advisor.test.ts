@@ -148,8 +148,31 @@ test("a paragraph with every figure in its place passes", () => {
 });
 
 test("room at the waist must be the waist's room", () => {
-  assert.equal(says("W32 is your size: it leaves you 1 cm of room at the waist."), false);
-  assert.equal(says("W32 is your size: it leaves you 3 cm of room at the waist."), false);
+  // At 81.5 cm the waist has 2 cm of room in W32.
+  const ev = emptyEvidence();
+  collect(ev, runEngine(referenceTwin({ waist: 81.5, inseam: 79 }), marea));
+  assert.equal(says("W32 is your size: it leaves you 2 cm of room at the waist.", ev), true);
+  assert.equal(says("W32 is your size: it leaves you 1 cm of room at the waist.", ev), false);
+  assert.equal(says("W32 is your size: it leaves you 3 cm of room at the waist.", ev), false);
+});
+
+test("half a centimetre may be rounded either way, and no further", () => {
+  // The turn-up is 2.5 cm.
+  assert.equal(says("W32 is your size; turn up the leg by 2 cm."), true);
+  assert.equal(says("W32 is your size; turn up the leg by 3 cm."), true);
+  assert.equal(says("W32 is your size; turn up the leg by 1 cm."), false);
+});
+
+test("a length named on its own is read as that length", () => {
+  const { ev, twin } = inPlace();
+  // W32 L30 is cut for a 76 cm leg: 3 cm short on this 79 cm leg.
+  collect(ev, factsForSize(twin, marea, "W32 L30"));
+  assert.equal(says("W32 is your size; the L30 would run 3 cm short.", ev), true);
+  assert.equal(says("W32 is your size; the L30 would leave 3 cm to turn up.", ev), false);
+  // A length the pair is not cut in cannot be mentioned.
+  assert.equal(says("W32 is your size; the L36 would be too long.", ev), false);
+  // The chosen length named on its own is the chosen size.
+  assert.equal(says("W32 is your size; the L32 leaves 3 cm to turn up.", ev), true);
 });
 
 test("a percentage is not a length", () => {
@@ -177,6 +200,7 @@ test("a leg that runs short is never said to need turning up", () => {
     verify({ explanation: text, size_named: "W32 L34" }, ev, "W32 L34").ok;
   assert.equal(ok("W32 is your size; you will need to turn up the leg by 4 cm."), false);
   assert.equal(ok("W32 is your size, though the leg runs 4 cm short."), true);
+  assert.equal(ok("W32 is your size, though even the L34 runs 3 cm short."), true);
 });
 
 test("another size's figures count only for that size", () => {
