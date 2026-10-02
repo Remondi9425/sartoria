@@ -41,6 +41,8 @@ export interface Evidence {
   facts: Fact[];
   /** Size labels it may mention, as their waist: "W32". */
   labels: Set<string>;
+  /** Leg lengths it may mention on their own: "L34". */
+  lengths: Set<string>;
   /** Full labels it saw facts for: "W32 L32". */
   sized: Set<string>;
   /** How each size it saw reads, for the direction checks. */
@@ -48,14 +50,19 @@ export interface Evidence {
 }
 
 export function emptyEvidence(): Evidence {
-  return { facts: [], labels: new Set(), sized: new Set(), reads: new Map() };
+  return { facts: [], labels: new Set(), lengths: new Set(), sized: new Set(), reads: new Map() };
 }
 
 const LABEL = /\bW(\d{2})(?:\s*L(\d{2}))?\b/g;
+/** A size, or a length named on its own ("the L34"), in the order written. */
+const MENTION = /\bW(\d{2})(?:\s*L(\d{2}))?\b|\bL(\d{2})\b/g;
 const waistOf = (label: string) => label.split(" ")[0];
 
 function addLabels(ev: Evidence, text: string): void {
-  for (const m of text.matchAll(LABEL)) ev.labels.add(`W${m[1]}`);
+  for (const m of text.matchAll(LABEL)) {
+    ev.labels.add(`W${m[1]}`);
+    if (m[2]) ev.lengths.add(`L${m[2]}`);
+  }
 }
 
 function addFacts(ev: Evidence, f: SizeFacts): void {
@@ -63,7 +70,7 @@ function addFacts(ev: Evidence, f: SizeFacts): void {
                 unit: Fact["unit"], value: number) =>
     ev.facts.push({ size, area, quantity, unit, value: Math.abs(value) });
 
-  ev.labels.add(waistOf(f.size));
+  addLabels(ev, f.size);
   ev.sized.add(f.size);
   const reads: { waist: AreaVerdict; seat?: AreaVerdict; length?: LengthRead } =
     { waist: f.waist.reads };
@@ -116,10 +123,13 @@ export function collect(ev: Evidence, value: unknown): void {
   }
 }
 
-/** A stated number is supported if it is a shown number, or that number rounded. */
+/**
+ * A stated number is supported if it is a shown number, or that number rounded
+ * to a whole centimetre. Either way: 2.5 may be written 2 or 3.
+ */
 function supported(n: number, values: number[]): boolean {
   return values.some((k) =>
-    Math.abs(k - n) < 0.051 || (Number.isInteger(n) && Math.round(k) === n));
+    Math.abs(k - n) < 0.051 || (Number.isInteger(n) && Math.abs(k - n) <= 0.5));
 }
 
 const AREA_WORDS: [Area | "thigh", RegExp][] = [
@@ -168,10 +178,12 @@ export function verify(draft: Draft, ev: Evidence, engineSize: string | null): V
     return { ok: false, reason: `does not name the chosen size ${size}` };
   }
 
-  // Every size it mentions must be one it was shown.
-  for (const m of text.matchAll(LABEL)) {
-    const l = `W${m[1]}`;
-    if (!ev.labels.has(l)) return { ok: false, reason: `mentions ${l}, which no tool returned` };
+  // Every size and length it mentions must be one it was shown.
+  for (const m of text.matchAll(MENTION)) {
+    const l = m[3] ? `L${m[3]}` : `W${m[1]}`;
+    if (!(m[3] ? ev.lengths : ev.labels).has(l)) {
+      return { ok: false, reason: `mentions ${l}, which no tool returned` };
+    }
   }
 
   // Which sizes a mention means: the exact one when the length is given; the
@@ -181,16 +193,22 @@ export function verify(draft: Draft, ev: Evidence, engineSize: string | null): V
     if (engineSize && waistOf(engineSize) === `W${w}`) return [engineSize];
     return [...ev.sized].filter((s) => waistOf(s) === `W${w}`);
   };
+  // A length on its own means that length in the waist being talked about.
+  const resolveLength = (l: string, about: string[]): string[] => {
+    const w = about[0] ? waistOf(about[0]) : engineSize ? waistOf(engineSize) : null;
+    return [...ev.sized].filter((s) => s.endsWith(` L${l}`) && (!w || waistOf(s) === w));
+  };
 
   for (const sentence of text.split(/(?<=[.!?;:])\s+/)) {
     // A sentence is about the chosen size until it names another.
     let about: string[] = engineSize ? [engineSize] : [];
     for (const clause of sentence.split(/,\s+|\s+[—–-]\s+|\s+(?:but|though|although|while|so)\s+/i)) {
-      const named = [...clause.matchAll(LABEL)].at(-1);
-      if (named) about = resolve(named[1], named[2]);
+      for (const m of clause.matchAll(MENTION)) {
+        about = m[3] ? resolveLength(m[3], about) : resolve(m[1], m[2]);
+      }
 
       const areas = AREA_WORDS.filter(([, re]) => re.test(clause)).map(([a]) => a);
-      const bare = clause.replace(LABEL, " ");
+      const bare = clause.replace(MENTION, " ");
 
       for (const m of bare.matchAll(NUMBER)) {
         const unit = m[3] ? (m[3] === "%" || /per/i.test(m[3]) ? "pct" : "cm") : null;
