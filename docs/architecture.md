@@ -9,9 +9,11 @@ typed answer on the fitting ticket. `/api/advisor` is the Fit Advisor: an agent
 (`web/lib/fitAdvisor/`) that, when the customer opens "Why this size?", calls
 deterministic tools — `run_fit_engine` (the same calculator), `check_size`,
 `pair_details`, `measurement_sources` — and writes a short explanation. The
-paragraph is shown only if it names the calculator's size and every number and
-size label in it came back from one of those tool calls (`verify.ts`); otherwise
-the screen keeps the calculator's fixed sentences. A paragraph that is shown is
+paragraph is shown only if it names the calculator's size, mentions only sizes a
+tool returned, and every number in it is the figure a tool returned for the size
+and the part of the body it is written next to, in its unit; a hem said to run
+the wrong way is rejected too (`verify.ts`). Otherwise the screen keeps the
+calculator's fixed sentences. A paragraph that is shown is
 labelled "Suggested by AI". The advisor needs `ANTHROPIC_API_KEY`; without it
 the route returns 503 and only the fixed sentences appear.
 

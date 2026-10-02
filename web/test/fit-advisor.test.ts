@@ -8,7 +8,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { PRODUCTS, productById } from "../lib/catalog";
 import { sizeCalculator } from "../lib/engine/advisor";
 import { MAX_TURNS, runFitAdvisor, type CreateMessage } from "../lib/fitAdvisor/agent";
-import { factsForSize, runEngine, sourceOf } from "../lib/fitAdvisor/facts";
+import { factsForSize, pairDetails, runEngine, sourceOf } from "../lib/fitAdvisor/facts";
 import { advisorRequest } from "../lib/fitAdvisor/request";
 import { collect, emptyEvidence, verify } from "../lib/fitAdvisor/verify";
 import { referenceTwin } from "./fixtures";
@@ -53,7 +53,8 @@ test("a measurement read with low confidence yields no figure at all", () => {
   assert.ok("unreliable" in f.length);
   const ev = emptyEvidence();
   collect(ev, f);
-  assert.ok(!ev.numbers.has(99), "the unreliable seat leaked into the evidence");
+  assert.ok(!ev.facts.some((x) => x.area === "seat" || x.area === "length"),
+            "the unreliable seat or inseam leaked into the evidence");
 });
 
 test("typed-in and read-back numbers are never described as a video", () => {
@@ -118,6 +119,78 @@ test("when the calculator refuses, the advisor may not pick", () => {
                         size_named: null }, ev, null).ok, true);
   assert.equal(verify({ explanation: `Take ${nearest}.`, size_named: nearest }, ev, null).ok,
                false);
+});
+
+// ── numbers in their place (#46) ────────────────────────────────────────────
+// A leg 79 cm long in Marea's W32 L32: waist 81–83.5 cm with 1.5 cm of room,
+// seat 98–100.5 cm, and an 81.5 cm inseam, so 2.5 cm to turn up. Every number
+// in the rejected sentences below appears somewhere in the tool output; each
+// is in the wrong place.
+
+function inPlace(extra: object[] = []) {
+  const twin = referenceTwin({ inseam: 79 });
+  const ev = emptyEvidence();
+  collect(ev, runEngine(twin, marea));
+  collect(ev, pairDetails(marea));
+  for (const x of extra) collect(ev, x);
+  return { ev, twin };
+}
+const says = (text: string, ev = inPlace().ev) =>
+  verify({ explanation: text, size_named: "W32 L32" }, ev, "W32 L32").ok;
+
+test("a paragraph with every figure in its place passes", () => {
+  assert.equal(says(
+    "W32 is your size: your 82 cm waist sits inside its 81–83.5 cm band, and your " +
+    "99 cm seat sits comfortably inside 98–100.5 cm. The inseam is 81.5 cm against " +
+    "your 79 cm, so there's 3 cm of length to turn up. With 2% elastane the tapered " +
+    "leg has a little give."), true);
+  assert.equal(says("W32 is your size, with 2 cm of room at the waist."), true);
+});
+
+test("room at the waist must be the waist's room", () => {
+  assert.equal(says("W32 is your size: it leaves you 1 cm of room at the waist."), false);
+  assert.equal(says("W32 is your size: it leaves you 3 cm of room at the waist."), false);
+});
+
+test("a percentage is not a length", () => {
+  // 40 is how far into the waist's range the body sits, in per cent.
+  assert.equal(says("W32 is your size: it leaves you 40 cm of room at the waist."), false);
+  assert.equal(says("W32 is your size: your waist sits 40% of the way up its range."), true);
+});
+
+test("one part of the body's figure is not another's", () => {
+  // 2.5 cm is the turn-up, not room at the waist.
+  assert.equal(says("W32 is your size, with 2.5 cm of room at the waist."), false);
+});
+
+test("a leg that needs turning up is never said to run short", () => {
+  assert.equal(says("W32 is your size, but it runs 3 cm short in the leg."), false);
+  assert.equal(says("W32 is your size; turn up the leg by 3 cm."), true);
+});
+
+test("a leg that runs short is never said to need turning up", () => {
+  // At 90 cm the longest length, L34 (86.5 cm), is 3.5 cm short.
+  const twin = referenceTwin({ inseam: 90 });
+  const ev = emptyEvidence();
+  collect(ev, runEngine(twin, marea));
+  const ok = (text: string) =>
+    verify({ explanation: text, size_named: "W32 L34" }, ev, "W32 L34").ok;
+  assert.equal(ok("W32 is your size; you will need to turn up the leg by 4 cm."), false);
+  assert.equal(ok("W32 is your size, though the leg runs 4 cm short."), true);
+});
+
+test("another size's figures count only for that size", () => {
+  const { ev, twin } = inPlace();
+  collect(ev, factsForSize(twin, marea, "W33 L32"));
+  assert.equal(says("W32 is your size. W33 starts at 83.5 cm, above your waist.", ev), true);
+  // 4 cm is W33's room at the waist, not W32's.
+  assert.equal(says("W32 is your size, with 4 cm of room at the waist.", ev), false);
+  // W33 is roomy at the waist on this body.
+  assert.equal(says("W32 is your size. W33 would be tight at the waist.", ev), false);
+});
+
+test("a figure about the thigh is refused: no chart publishes one", () => {
+  assert.equal(says("W32 is your size, with 1 cm of give at the thigh."), false);
 });
 
 // ── the loop ────────────────────────────────────────────────────────────────

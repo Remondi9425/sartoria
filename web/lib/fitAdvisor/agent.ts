@@ -9,8 +9,10 @@
  *   one body it is being fitted to, and none of them can change a size;
  * - the size comes from `run_fit_engine`, the same calculator as the rest of
  *   the app, and the paragraph is rejected unless it names that size;
- * - every number and size label in the paragraph must have come back from a
- *   tool call in this run (`verify.ts`), or the paragraph is dropped.
+ * - every number in the paragraph must be the figure a tool returned for the
+ *   size and the part of the body it is written next to, in its unit, and a
+ *   hem may not be described the wrong way round (`verify.ts`), or the
+ *   paragraph is dropped.
  *
  * It never picks the size. It explains the one the calculator picked.
  *
@@ -53,6 +55,10 @@ const SYSTEM =
   "size_named to null.\n" +
   "- Every number you write must appear in a tool result. Round only to whole " +
   "centimetres. Do not calculate new numbers.\n" +
+  "- Write each figure with its unit (cm or %), in the same clause as the part of " +
+  "the body it describes (waist, seat, leg). Each figure is checked against that " +
+  "part of the body and that size.\n" +
+  "- \"Room\" is room_to_top_cm and nothing else.\n" +
   "- Anything marked unreliable was not measured well enough: say so, give no figure.\n" +
   "- Say which way a hem goes: a positive length difference is length to turn up, a " +
   "negative one means the pair runs short.\n" +
