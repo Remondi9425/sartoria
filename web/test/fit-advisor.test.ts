@@ -8,7 +8,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { PRODUCTS, productById } from "../lib/catalog";
 import { sizeCalculator } from "../lib/engine/advisor";
 import { MAX_TURNS, runFitAdvisor, type CreateMessage } from "../lib/fitAdvisor/agent";
-import { factsForSize, pairDetails, runEngine, sourceOf } from "../lib/fitAdvisor/facts";
+import { factsForSize, measurementSources, pairDetails, runEngine, sourceOf } from "../lib/fitAdvisor/facts";
 import { advisorRequest } from "../lib/fitAdvisor/request";
 import { collect, emptyEvidence, verify } from "../lib/fitAdvisor/verify";
 import { referenceTwin } from "./fixtures";
@@ -215,6 +215,79 @@ test("another size's figures count only for that size", () => {
 
 test("a figure about the thigh is refused: no chart publishes one", () => {
   assert.equal(says("W32 is your size, with 1 cm of give at the thigh."), false);
+});
+
+// ── real answers ────────────────────────────────────────────────────────────
+// Paragraphs the live model wrote, word for word, that an earlier version of
+// the check rejected although every figure in them is right.
+
+function seen(twin: ReturnType<typeof referenceTwin>, id: string, checked: string[] = []) {
+  const product = productById(id)!;
+  const ev = emptyEvidence();
+  collect(ev, runEngine(twin, product));
+  collect(ev, measurementSources(twin));
+  collect(ev, pairDetails(product));
+  for (const label of checked) collect(ev, factsForSize(twin, product, label));
+  return { ev, size: runEngine(twin, product).size! };
+}
+function typed(m: { waist: number; hip: number; inseam: number }) {
+  const twin = referenceTwin(m);
+  for (const k of ["waist", "hip", "inseam"] as const) twin.measurement_confidence[k] = "medium";
+  twin.processing_method = "manual_entry_v1";
+  return twin;
+}
+
+test("a real answer: your waist in cm, then the room it has", () => {
+  const { ev, size } = seen(typed({ waist: 82, hip: 99, inseam: 79 }), "marea-slim-tapered");
+  assert.deepEqual(verify({
+    explanation: "W32 L32 is true to size for you, decided at the waist: your 82 cm waist " +
+      "sits comfortably inside the band with 1.5 cm of room to the top, and your 99 cm " +
+      "seat likewise has 1.5 cm of room. The leg comes long by 2.5 cm, so there's length " +
+      "to turn up at the hem. The cloth is 98% cotton with 2% elastane, so this tapered, " +
+      "mid-rise cut will give a little as you wear it. Your measurements were typed in " +
+      "and are reasonably trustworthy.",
+    size_named: "W32 L32",
+  }, ev, size), { ok: true });
+});
+
+test("a real answer: a large waist on a relaxed cut", () => {
+  const { ev, size } = seen(typed({ waist: 112, hip: 124, inseam: 84 }), "fosco-loose-taper");
+  assert.deepEqual(verify({
+    explanation: "W44 L34 is your size, settled on the waist: your 112 cm sits comfortably " +
+      "inside the band with 1.5 cm of room at the waist. Through the seat it's an easy, " +
+      "relaxed fit, with 10.5 cm of room there, which suits this loose taper in rigid 100% " +
+      "cotton with no stretch. On the leg there's 2.5 cm of length to turn up at the hem. " +
+      "These are the figures you typed in yourself, so treat them as a fair guide rather " +
+      "than gospel.",
+    size_named: "W44 L34",
+  }, ev, size), { ok: true });
+});
+
+test("a real answer: a leg that runs short, and no hem to turn up", () => {
+  const twin = referenceTwin({ waist: 83, hip: 101, inseam: 90 });
+  twin.processing_method = "nlf_smpl_v3";
+  const { ev, size } = seen(twin, "marea-slim-tapered", ["W33 L34"]);
+  assert.deepEqual(verify({
+    explanation: "Your size is W32 L34: a snug fit, with 0.5 cm of room left at the waist " +
+      "and the seat a touch over at -0.5 cm, so the 2% elastane will do some work. The " +
+      "thigh reads snug too, though that measurement from your video is only middling, so " +
+      "take it as a hint. If you'd rather have ease, W33 L34 leaves 3 cm of room at the " +
+      "waist and 2 cm at the seat, but reads roomy. Either way the leg runs short by 3.5 cm " +
+      "against your inseam, so there's no hem to turn up.",
+    size_named: "W32 L34",
+  }, ev, size), { ok: true });
+  // The same sentence without the "no" says the opposite of the calculator.
+  assert.equal(verify({
+    explanation: "Your size is W32 L34. The leg runs short by 3.5 cm, so there's a hem to turn up.",
+    size_named: "W32 L34",
+  }, ev, size).ok, false);
+});
+
+test("the room is the figure next to the word, not every figure in the clause", () => {
+  const { ev, size } = seen(typed({ waist: 82, hip: 99, inseam: 79 }), "marea-slim-tapered");
+  // 82 is the waist; it is not 82 cm of room.
+  assert.equal(verify({ explanation: "W32 leaves you 82 cm of room at the waist.",
+                        size_named: "W32" }, ev, size).ok, false);
 });
 
 // ── the loop ────────────────────────────────────────────────────────────────
