@@ -139,14 +139,30 @@ const AREA_WORDS: [Area | "thigh", RegExp][] = [
   ["thigh", /\bthighs?\b/i],
 ];
 
-/** Words that pin a centimetre figure to one quantity. */
-const ROOM = /\b(room|spare|left over|to grow)\b/i;
-const ABOVE = /\b(above the bottom|from the bottom|into (the|its|that) (range|band))\b/i;
-const HEM = /\b(turn(ed|ing|s)?[- ]up|too long|runs? long|too short|runs? short|longer|shorter)\b/i;
-const SAYS_SHORT = /\bshort(er)?\b/i;
-const SAYS_LONG = /\b(turn(ed|ing|s)?[- ]up|too long|runs? long|longer)\b/i;
-const SAYS_LOOSE = /\b(loose|roomy|baggy)\b/i;
-const SAYS_TIGHT = /\b(tight|snug)\b/i;
+/**
+ * Words that pin a centimetre figure to one quantity. They are read next to
+ * the figure — "1.5 cm of room", "runs short by 3.5 cm" — not anywhere in the
+ * clause: "your 82 cm waist … with 1.5 cm of room" makes 1.5 the room, not 82.
+ */
+const ROOM_AFTER = /^\s*(cm\s*)?(of\s+)?(room|spare|left over|to spare|to grow)\b/i;
+const ROOM_BEFORE = /\broom (of|for)\s*$/i;
+const ABOVE_AFTER = /^\s*(cm\s*)?(above the bottom|from the bottom|into (the|its|that) (range|band))\b/i;
+const HEM =
+  /\b(turn(ed|ing|s)?[- ]up|too long|runs? long|comes? (up )?long|too short|runs? short|comes? (up )?short|longer|shorter|long by|short by|up by)\b/i;
+const SAYS_SHORT = /\bshort(er)?\b/gi;
+const SAYS_LONG = /\b(turn(ed|ing|s)?[- ]up|too long|runs? long|comes? (up )?long|longer)\b/gi;
+const SAYS_LOOSE = /\b(loose|roomy|baggy)\b/gi;
+const SAYS_TIGHT = /\b(tight|snug)\b/gi;
+const NEGATION = /\b(no|not|nothing|never|without|nor)\b|n't\b/i;
+
+/** Whether the clause says it, and does not say it is not: "there's no hem to
+ *  turn up" does not say the leg needs turning up. */
+function affirms(re: RegExp, clause: string): boolean {
+  for (const m of clause.matchAll(re)) {
+    if (!NEGATION.test(clause.slice(Math.max(0, m.index - 20), m.index))) return true;
+  }
+  return false;
+}
 
 /** A number, an optional second end of a range, and its unit. */
 const NUMBER = /(\d+(?:[.,]\d+)?)(?:\s*(?:-|–|—|to)\s*(\d+(?:[.,]\d+)?))?\s*(cm\b|%|per ?cent\b)?/gi;
@@ -210,13 +226,18 @@ export function verify(draft: Draft, ev: Evidence, engineSize: string | null): V
       const areas = AREA_WORDS.filter(([, re]) => re.test(clause)).map(([a]) => a);
       const bare = clause.replace(MENTION, " ");
 
-      for (const m of bare.matchAll(NUMBER)) {
+      const numbers = [...bare.matchAll(NUMBER)];
+      const endOf = (m: RegExpExecArray) => m.index + m[0].length;
+      for (const [i, m] of numbers.entries()) {
+        // The words between this figure and its neighbours say what it is.
+        const after = bare.slice(endOf(m), numbers[i + 1]?.index ?? bare.length).slice(0, 30);
+        const before = bare.slice(i > 0 ? endOf(numbers[i - 1]) : 0, m.index).slice(-20);
         const unit = m[3] ? (m[3] === "%" || /per/i.test(m[3]) ? "pct" : "cm") : null;
         const quantity: Quantity | null =
           unit === "pct" ? null
-          : HEM.test(clause) && areas.includes("length") ? "difference"
-          : ROOM.test(clause) ? "room"
-          : ABOVE.test(clause) ? "above"
+          : areas.includes("length") && (HEM.test(after) || HEM.test(before)) ? "difference"
+          : ROOM_AFTER.test(after) || ROOM_BEFORE.test(before) ? "room"
+          : ABOVE_AFTER.test(after) ? "above"
           : null;
         const pool = ev.facts.filter((f) =>
           (f.size === null || about.includes(f.size)) &&
@@ -237,19 +258,19 @@ export function verify(draft: Draft, ev: Evidence, engineSize: string | null): V
       for (const s of about) {
         const reads = ev.reads.get(s);
         if (!reads) continue;
-        if (areas.includes("length") && reads.length === "turn up" && SAYS_SHORT.test(clause)) {
+        if (areas.includes("length") && reads.length === "turn up" && affirms(SAYS_SHORT, clause)) {
           return { ok: false, reason: `says ${s} runs short; it needs turning up` };
         }
-        if (areas.includes("length") && reads.length === "runs short" && SAYS_LONG.test(clause)) {
+        if (areas.includes("length") && reads.length === "runs short" && affirms(SAYS_LONG, clause)) {
           return { ok: false, reason: `says ${s} needs turning up; it runs short` };
         }
         for (const area of ["waist", "seat"] as const) {
           if (areas.length !== 1 || areas[0] !== area) continue;
           const v = reads[area];
-          if (v === "snug" && SAYS_LOOSE.test(clause)) {
+          if (v === "snug" && affirms(SAYS_LOOSE, clause)) {
             return { ok: false, reason: `calls the ${area} of ${s} loose; it reads snug` };
           }
-          if (v === "roomy" && SAYS_TIGHT.test(clause)) {
+          if (v === "roomy" && affirms(SAYS_TIGHT, clause)) {
             return { ok: false, reason: `calls the ${area} of ${s} tight; it reads roomy` };
           }
         }
