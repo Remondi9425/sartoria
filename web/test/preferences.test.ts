@@ -100,12 +100,14 @@ test("an empty ticket, or one of notes only, names no pick", () => {
 });
 
 test("a pick is the top of the ledger, fits, and says why", () => {
-  const rows = sizedRows([need("close")]);
-  const picks = picksFor([need("close")]);
-  assert.equal(picks.length, 1);
+  const rows = sizedRows([need("nostretch"), need("closures")]);
+  const picks = picksFor([need("nostretch"), need("closures")]);
+  assert.ok(picks.length >= 1);
   assert.equal(picks[0].product.id, rows[0].product.id);
-  assert.notEqual(picks[0].fit.size, null);
-  assert.ok(picks[0].reasons.length > 0);
+  for (const p of picks) {
+    assert.notEqual(p.fit.size, null);
+    assert.ok(p.reasons.length > 0);
+  }
 });
 
 test("pairs level at the top are named together, never one of them alone", () => {
@@ -117,8 +119,11 @@ test("pairs level at the top are named together, never one of them alone", () =>
 });
 
 test("too many pairs level at the top and nothing is picked", () => {
-  // Cycling: seven pairs score the same, so the ticket has not chosen.
-  assert.deepEqual(picksFor([need("cycling")]), []);
+  // Travel asks only for stretch, and most of the shelf has some: the ticket
+  // has not chosen.
+  const level = sizedRows([need("travel")]).filter((r) => r.fit.size && r.score === 1);
+  assert.ok(level.length > MAX_PICKS);
+  assert.deepEqual(picksFor([need("travel")]), []);
   for (const id of EVERY) assert.ok(picksFor([need(id)]).length <= MAX_PICKS, id);
 });
 

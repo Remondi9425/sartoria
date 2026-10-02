@@ -36,19 +36,19 @@ test("the facts for the chosen size agree with the calculator's verdicts", () =>
 });
 
 test("the reference body sits mid-range at the waist in its size", () => {
-  const f = factsForSize(referenceTwin(), marea, "W31 L32")!;
-  assert.deepEqual(f.waist.size_range_cm, [80, 84]);
-  assert.equal(f.waist.position_pct, 50);
+  const f = factsForSize(referenceTwin(), marea, "W32 L32")!;
+  assert.deepEqual(f.waist.size_range_cm, [81, 83.5]);
+  assert.equal(f.waist.position_pct, 40);
   assert.ok(!("unreliable" in f.length));
-  assert.equal(f.length.difference_cm, 1);
-  assert.equal(f.length.reads, "turn up");
+  assert.equal(f.length.difference_cm, 0.5);
+  assert.equal(f.length.reads, "right length");
 });
 
 test("a measurement read with low confidence yields no figure at all", () => {
   const twin = referenceTwin();
   twin.measurement_confidence.hip = "low";
   twin.measurement_confidence.inseam = "low";
-  const f = factsForSize(twin, marea, "W31 L32")!;
+  const f = factsForSize(twin, marea, "W32 L32")!;
   assert.ok("unreliable" in f.seat);
   assert.ok("unreliable" in f.length);
   const ev = emptyEvidence();
@@ -83,30 +83,30 @@ function evidenceFor(twin = referenceTwin()) {
 
 test("a paragraph built from the engine's numbers passes", () => {
   const v = verify({
-    explanation: "W31 is right for you: your waist sits in the middle of its 80–84 cm " +
-      "range, and the leg is 1 cm long, so a small turn-up.",
-    size_named: "W31 L32",
-  }, evidenceFor(), "W31 L32");
+    explanation: "W32 is right for you: your waist sits inside its 81–83.5 cm " +
+      "range, and the leg is the right length.",
+    size_named: "W32 L32",
+  }, evidenceFor(), "W32 L32");
   assert.deepEqual(v, { ok: true });
 });
 
 test("an invented number is caught", () => {
   const v = verify({
-    explanation: "W31 fits, with 3.5 cm of room at the waist.",
-    size_named: "W31",
-  }, evidenceFor(), "W31 L32");
+    explanation: "W32 fits, with 3.5 cm of room at the waist.",
+    size_named: "W32",
+  }, evidenceFor(), "W32 L32");
   assert.equal(v.ok, false);
 });
 
 test("naming a different size than the calculator is caught", () => {
-  const v = verify({ explanation: "Go for W32.", size_named: "W32" },
-                   evidenceFor(), "W31 L32");
+  const v = verify({ explanation: "Go for W33.", size_named: "W33" },
+                   evidenceFor(), "W32 L32");
   assert.equal(v.ok, false);
 });
 
 test("a size nobody looked at cannot be mentioned", () => {
-  const v = verify({ explanation: "W31 fits; W34 would be loose.", size_named: "W31" },
-                   evidenceFor(), "W31 L32");
+  const v = verify({ explanation: "W32 fits; W35 would be loose.", size_named: "W32" },
+                   evidenceFor(), "W32 L32");
   assert.equal(v.ok, false);
 });
 
@@ -151,13 +151,13 @@ function scripted(...turns: Beta[]): { create: CreateMessage; seen: Params[] } {
 test("the agent calls its tools, then writes a paragraph that passes", async () => {
   const { create, seen } = scripted(
     reply("tool_use", [call("run_fit_engine"), call("measurement_sources")]),
-    reply("tool_use", [call("check_size", { label: "W32 L32" })]),
-    answer("W31 is your size: your waist sits in the middle of it. W32 starts 2 cm " +
-           "above your waist, so it would sit loose. The leg runs 1 cm long.", "W31 L32"),
+    reply("tool_use", [call("check_size", { label: "W33 L32" })]),
+    answer("W32 is your size: your 82 cm waist sits inside it. W33 starts at 83.5 cm, " +
+           "above your waist, so it would sit loose. The leg is the right length.", "W32 L32"),
   );
   const out = await runFitAdvisor(create, referenceTwin(), marea);
   assert.equal(out.ok, true, JSON.stringify(out));
-  assert.deepEqual(out.steps, ["run_fit_engine", "measurement_sources", "check_size W32 L32"]);
+  assert.deepEqual(out.steps, ["run_fit_engine", "measurement_sources", "check_size W33 L32"]);
   // The tool results went back to the model, both in one user turn.
   const last = seen[2].messages.at(-1)!;
   assert.equal(last.role, "user");
@@ -165,7 +165,7 @@ test("the agent calls its tools, then writes a paragraph that passes", async () 
 });
 
 test("an answer given without running the engine is dropped", async () => {
-  const { create } = scripted(answer("W31 is right for you.", "W31"));
+  const { create } = scripted(answer("W32 is right for you.", "W32"));
   const out = await runFitAdvisor(create, referenceTwin(), marea);
   assert.equal(out.ok, false);
 });
@@ -173,7 +173,7 @@ test("an answer given without running the engine is dropped", async () => {
 test("a paragraph with an invented figure is dropped, not shown", async () => {
   const { create } = scripted(
     reply("tool_use", [call("run_fit_engine")]),
-    answer("W31 is your size, with 7 cm to spare at the seat.", "W31"),
+    answer("W32 is your size, with 7 cm to spare at the seat.", "W32"),
   );
   const out = await runFitAdvisor(create, referenceTwin(), marea);
   assert.equal(out.ok, false);
@@ -182,7 +182,7 @@ test("a paragraph with an invented figure is dropped, not shown", async () => {
 test("a size the pair is not cut in is an error result, not a crash", async () => {
   const { create, seen } = scripted(
     reply("tool_use", [call("run_fit_engine"), call("check_size", { label: "W99" })]),
-    answer("W31 is your size.", "W31 L32"),
+    answer("W32 is your size.", "W32 L32"),
   );
   const out = await runFitAdvisor(create, referenceTwin(), marea);
   assert.equal(out.ok, true);

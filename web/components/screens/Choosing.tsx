@@ -117,6 +117,11 @@ export function Choosing({
                   <span className="figure block text-[24px] font-semibold leading-none">
                     {fit.size?.split(" ")[0] ?? "—"}
                   </span>
+                  {fit.size && (
+                    <span className="figure block pt-[3px] text-[11px] text-mute">
+                      {fit.size.split(" ")[1]}
+                    </span>
+                  )}
                   <span className="figure block pt-[5px] text-[11px] text-mute">
                     {euro(p.price_eur)}
                   </span>
