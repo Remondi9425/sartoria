@@ -10,7 +10,7 @@ import { test } from "node:test";
 import { PRODUCTS } from "../lib/catalog";
 import { calculator } from "../lib/engine";
 import {
-  hasStretch, rankByNeeds, scoreNeeds, type Need, type NeedId,
+  MAX_PICKS, hasStretch, rankByNeeds, scoreNeeds, topPicks, type Need, type NeedId,
 } from "../lib/preferences";
 import { QUESTIONS, fillAck } from "../lib/tailor";
 import { referenceTwin } from "./fixtures";
@@ -85,4 +85,46 @@ test("the tailor quotes the customer's own numbers", () => {
   const twin = referenceTwin({ thigh: 61, inseam: 84 });
   assert.match(fillAck("a {thigh} cm thigh", twin), /61 cm/);
   assert.match(fillAck("came out at {inseam} cm", twin), /84 cm/);
+});
+
+const sizedRows = (needs: Need[]) => {
+  const twin = referenceTwin();
+  return rankByNeeds(PRODUCTS, needs)
+    .map((r) => ({ ...r, fit: calculator.recommend(twin, r.product) }));
+};
+const picksFor = (needs: Need[]) => topPicks(sizedRows(needs), (r) => r.fit.size !== null);
+
+test("an empty ticket, or one of notes only, names no pick", () => {
+  assert.deepEqual(picksFor([]), []);
+  assert.deepEqual(picksFor([{ id: "note-1", label: "Deep pockets" }]), []);
+});
+
+test("a pick is the top of the ledger, fits, and says why", () => {
+  const rows = sizedRows([need("close")]);
+  const picks = picksFor([need("close")]);
+  assert.equal(picks.length, 1);
+  assert.equal(picks[0].product.id, rows[0].product.id);
+  assert.notEqual(picks[0].fit.size, null);
+  assert.ok(picks[0].reasons.length > 0);
+});
+
+test("pairs level at the top are named together, never one of them alone", () => {
+  const picks = picksFor([need("close"), need("thighs")]);
+  const rows = sizedRows([need("close"), need("thighs")]).filter((r) => r.fit.size);
+  const best = rows[0].score;
+  assert.deepEqual(picks.map((p) => p.product.id),
+                   rows.filter((r) => r.score === best).map((r) => r.product.id));
+});
+
+test("too many pairs level at the top and nothing is picked", () => {
+  // Cycling: seven pairs score the same, so the ticket has not chosen.
+  assert.deepEqual(picksFor([need("cycling")]), []);
+  for (const id of EVERY) assert.ok(picksFor([need(id)]).length <= MAX_PICKS, id);
+});
+
+test("a pair that does not fit is never picked, however well it scores", () => {
+  const rows = sizedRows([need("close")]);
+  const top = rows[0].product.id;
+  const picks = topPicks(rows, (r) => r.product.id !== top && r.fit.size !== null);
+  assert.ok(picks.every((p) => p.product.id !== top));
 });

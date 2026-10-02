@@ -65,7 +65,8 @@ export const INTRO =
   "I have your numbers, so your size is settled. Five quick questions about how " +
   "you wear jeans. They change the order I show things in, never the size.";
 
-export const DONE = "That's your ticket. I'll read it against every brand's chart.";
+export const DONE =
+  "That's your ticket. Your numbers set the size in every brand; the ticket sets what comes first.";
 
 export const FALLBACK_REPLY = "Noted. I'll keep that in mind.";
 
