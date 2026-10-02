@@ -14,8 +14,9 @@ tool returned, and every number in it is the figure a tool returned for the size
 and the part of the body it is written next to, in its unit; a hem said to run
 the wrong way is rejected too (`verify.ts`). Otherwise the screen keeps the
 calculator's fixed sentences. A paragraph that is shown is
-labelled "Suggested by AI". The advisor needs `ANTHROPIC_API_KEY`; without it
-the route returns 503 and only the fixed sentences appear.
+labelled "Suggested by AI". The advisor runs only with `FIT_ADVISOR_ENABLED=1`
+and `ANTHROPIC_API_KEY`; otherwise the route returns 503 and only the fixed
+sentences appear. Its cost limits are in docs/deployment.md.
 
 The real measurement path has four layers:
 

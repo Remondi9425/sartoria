@@ -39,6 +39,31 @@ For isolated local API development only, set both `SARTORIA_ENV=dev` and
 `SARTORIA_ALLOW_INSECURE_DEV=1` to allow an absent secret. On the frontend this also
 requires the Next.js development server. Do not expose that configuration publicly.
 
+## Optional Fit Advisor
+
+"Why this size?" can add a paragraph written by Claude (`/api/advisor`). Every
+time a customer opens it on a new pair, that is a paid run of a few model
+calls. It is off unless the server has both `FIT_ADVISOR_ENABLED=1` and
+`ANTHROPIC_API_KEY`; the key alone, which the tailor's route also uses, does not
+switch it on. Set `FIT_ADVISOR_ENABLED=0` or remove it to turn the advisor off
+and keep the tailor.
+
+What bounds the cost:
+
+- One run: at most three rounds of tool calls before the answer, and only the
+  sizes near the chosen one are offered for comparison. Measured on the real
+  model, a run is two or three calls and about 5,500 input and 330 output
+  tokens.
+- One page: an answer, or a failure, is kept in memory for the pair, so
+  opening the same pair again does not run it again.
+- One instance: 20 runs per address per ten minutes and 200 runs per hour in
+  total. Both counters live in one serverless instance and reset on a cold
+  start, so they slow a loop down; they are not a quota.
+- Everything: set a monthly spend limit on the Anthropic workspace that owns
+  the key, in the Anthropic Console. It is the only limit that holds across
+  every instance, and it also covers the tailor. Prefer a key used only by
+  this deployment, so the limit means what it says.
+
 ## Public-service work still required
 
 The source can be studied and run locally, but unrestricted scans incur GPU costs

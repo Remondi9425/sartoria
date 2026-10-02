@@ -8,8 +8,16 @@
  * from those numbers, so the size the advisor explains is the calculator's and
  * not whatever a client claims.
  *
- * It needs ANTHROPIC_API_KEY, read server-side from the environment (e.g.
- * web/.env.local, never committed). There is no stand-in for the model.
+ * It runs only when FIT_ADVISOR_ENABLED=1 and ANTHROPIC_API_KEY is set, both
+ * read server-side from the environment (e.g. web/.env.local, never
+ * committed). The key is shared with the tailor's route, so having it is not
+ * enough: every "Why this size?" is a paid run, and it is switched on on
+ * purpose. There is no stand-in for the model.
+ *
+ * What one run can cost is bounded in the agent (a few rounds, a short list of
+ * sizes). How many runs there are is bounded here only per instance; the
+ * bound that holds across all of them is the spend limit on the Anthropic
+ * workspace that owns the key (docs/deployment.md).
  *
  * Nothing is kept. The numbers are not logged and not stored; they go to
  * Anthropic's API for the length of one explanation and are discarded. Without
@@ -29,6 +37,9 @@ const MAX_BODY_BYTES = 2048;
 const LIMIT = 20;
 const WINDOW_MS = 10 * 60 * 1000;
 const TIMEOUT_MS = 12000;
+/** Runs one instance will start in an hour, from everyone together. */
+const HOURLY_RUNS = 200;
+const HOUR_MS = 60 * 60 * 1000;
 
 // Per-instance, reset by every cold start — like the other routes. It blunts
 // a loop from one address; it is not a quota.
@@ -42,6 +53,18 @@ function tooMany(req: NextRequest): boolean {
   if (!over) recent.push(now);
   seen.set(id, recent);
   return over;
+}
+
+// Per-instance as well: it stops one warm instance from running up the bill
+// when many addresses ask at once. The workspace spend limit is the real cap.
+let runs: number[] = [];
+
+function overBudget(): boolean {
+  const now = Date.now();
+  runs = runs.filter((t) => now - t < HOUR_MS);
+  if (runs.length >= HOURLY_RUNS) return true;
+  runs.push(now);
+  return false;
 }
 
 const noStore = { "cache-control": "no-store" };
@@ -83,6 +106,10 @@ function twinFrom(b: Record<string, unknown>): DigitalTwin | null {
 }
 
 export async function POST(req: NextRequest) {
+  if (process.env.FIT_ADVISOR_ENABLED !== "1") {
+    return NextResponse.json({ error: "The fit advisor is switched off." },
+                             { status: 503, headers: noStore });
+  }
   if (!process.env.ANTHROPIC_API_KEY) {
     return NextResponse.json({ error: "The fit advisor needs ANTHROPIC_API_KEY on the server." },
                              { status: 503, headers: noStore });
@@ -107,6 +134,11 @@ export async function POST(req: NextRequest) {
   const twin = twinFrom(body);
   if (!product || !twin) {
     return NextResponse.json({ error: "Nothing to explain." }, { status: 400, headers: noStore });
+  }
+
+  if (overBudget()) {
+    return NextResponse.json({ error: "The fit advisor is resting for now." },
+                             { status: 429, headers: noStore });
   }
 
   const client = new Anthropic({ timeout: TIMEOUT_MS, maxRetries: 0 });

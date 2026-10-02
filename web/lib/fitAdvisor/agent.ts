@@ -21,7 +21,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import type { DigitalTwin, Product } from "../engine/types";
 import {
-  factsForSize, labelsOf, measurementSources, pairDetails, runEngine,
+  comparableSizes, factsForSize, measurementSources, pairDetails, runEngine,
 } from "./facts";
 import { collect, emptyEvidence, verify, type Draft } from "./verify";
 
@@ -32,9 +32,10 @@ type ToolResult = Anthropic.Beta.Messages.BetaToolResultBlockParam;
 
 export type CreateMessage = (params: Params) => Promise<Beta>;
 
-/** Tool calls allowed before the advisor must answer. Four tools; a careful
- *  run uses three or four. Twice that is a loop, not a thought. */
-export const MAX_TURNS = 6;
+/** Rounds of tool calls allowed before the advisor must answer. A careful run
+ *  asks for three tools at once, sometimes compares one size, and answers:
+ *  two rounds. A third is slack; more is a loop, and every round is paid for. */
+export const MAX_TURNS = 3;
 
 export const MODEL = "claude-opus-5";
 
@@ -43,16 +44,18 @@ const SYSTEM =
   "calculator from the customer's body measurements and the brand's size chart. " +
   "You never choose or change a size: you explain the one the calculator chose, in " +
   "the voice of a good tailor.\n\n" +
-  "Use your tools to find out what you need. Always call run_fit_engine first. Call " +
+  "Use your tools to find out what you need. In your first turn, call run_fit_engine, " +
+  "measurement_sources and pair_details together; every turn is paid for. Call " +
   "check_size when comparing with a neighbouring size would help the customer decide " +
   "(for example when the fit is snug or roomy at the waist). Call measurement_sources " +
   "before saying anything about where the numbers came from, and pair_details before " +
   "saying anything about the cloth or cut.\n\n" +
   "Rules for the explanation:\n" +
   "- 2 to 4 short sentences, plain English, addressed to the customer as \"you\".\n" +
-  "- Name the chosen size (e.g. W31). If the calculator refused, say why and name the " +
-  "nearest size only as the closest on the chart, never as a recommendation, and set " +
-  "size_named to null.\n" +
+  "- Name the chosen size (e.g. W31). Set size_named to the size run_fit_engine " +
+  "returned, exactly (e.g. \"W31 L32\"), however snug or roomy it reads. Only if " +
+  "run_fit_engine returned no size: say why, name the nearest size only as the closest " +
+  "on the chart, never as a recommendation, and set size_named to null.\n" +
   "- Every number you write must appear in a tool result. Round only to whole " +
   "centimetres. Do not calculate new numbers.\n" +
   "- Write each figure with its unit (cm or %), in the same clause as the part of " +
@@ -75,7 +78,7 @@ const OUTPUT_SCHEMA = {
   additionalProperties: false,
 } as const;
 
-function tools(product: Product): Anthropic.Beta.Messages.BetaTool[] {
+function tools(twin: DigitalTwin, product: Product): Anthropic.Beta.Messages.BetaTool[] {
   const none = { type: "object" as const, properties: {}, additionalProperties: false };
   return [
     {
@@ -90,11 +93,11 @@ function tools(product: Product): Anthropic.Beta.Messages.BetaTool[] {
     {
       name: "check_size",
       description:
-        "How another size of this same pair would sit on this body, in the same terms " +
+        "How a nearby size of this same pair would sit on this body, in the same terms " +
         "as run_fit_engine. For comparison only: it does not change the chosen size.",
       input_schema: {
         type: "object",
-        properties: { label: { type: "string", enum: labelsOf(product) } },
+        properties: { label: { type: "string", enum: comparableSizes(twin, product) } },
         required: ["label"],
         additionalProperties: false,
       },
@@ -159,7 +162,7 @@ export async function runFitAdvisor(
     role: "user",
     content: `Explain the size for ${product.brand} ${product.name} to this customer.`,
   }];
-  const toolset = tools(product);
+  const toolset = tools(twin, product);
 
   for (let turn = 0; turn <= MAX_TURNS; turn++) {
     const res = await create({

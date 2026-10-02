@@ -61,6 +61,27 @@ export function labelsOf(product: Product): string[] {
   return product.chart.rows.map((r) => r.label);
 }
 
+/**
+ * The sizes worth comparing with the chosen one: up to two waists either side
+ * in the chosen length, and the chosen waist in its other lengths. When the
+ * calculator refuses, the same around the nearest size it names. Offering
+ * every size the pair is cut in — up to a hundred — is sent on every turn and
+ * adds nothing a customer would weigh.
+ */
+export function comparableSizes(twin: DigitalTwin, product: Product): string[] {
+  const fit = sizeCalculator.recommend(twin, product);
+  const centre = fit.size ?? fit.alternative;
+  const all = labelsOf(product);
+  if (!centre) return all;
+  const [w, l] = centre.split(" ");
+  const near = all.filter((label) => {
+    const [lw, ll] = label.split(" ");
+    const apart = Math.abs(Number(lw.slice(1)) - Number(w.slice(1)));
+    return label !== centre && ((ll === l && apart <= 2) || lw === w);
+  });
+  return near.length > 0 ? near : [centre];
+}
+
 /** How one size of this pair would sit on this body. Null for an unknown label. */
 export function factsForSize(twin: DigitalTwin, product: Product, label: string): SizeFacts | null {
   const raw = product.chart.rows.find((r) => r.label === label);
@@ -127,6 +148,8 @@ export function runEngine(twin: DigitalTwin, product: Product): EngineRun {
   };
 }
 
+const span = (ws: number[]) => `W${Math.min(...ws)}–W${Math.max(...ws)}`;
+
 /** The pair itself: what the explanation may say about its cut and cloth. */
 export function pairDetails(product: Product) {
   return {
@@ -140,7 +163,9 @@ export function pairDetails(product: Product) {
     chart: product.chart.kind === "body"
       ? "body chart: sizes list the body they fit"
       : "garment-flat chart: ease is added back before comparing",
-    sizes: labelsOf(product),
+    // The span, not the hundred labels: enough to say what the pair is cut in.
+    waists: span(labelsOf(product).map((s) => Number(s.split(" ")[0].slice(1)))),
+    lengths: [...new Set(labelsOf(product).map((s) => s.split(" ")[1]))],
   };
 }
 

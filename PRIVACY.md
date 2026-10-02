@@ -58,7 +58,9 @@ and sends those numbers, and facts derived from them for this one pair, to
 Anthropic's API to write the explanation. No video, height, ticket, other
 measurements or identifier is sent. The route neither logs nor stores the
 numbers, and does not return which check failed, since a reason can quote them.
-Without `ANTHROPIC_API_KEY` the route is off and the screen shows only the
+The page keeps the answer in memory while it is open, so the same pair is not
+asked about twice. Unless the operator switches it on (`FIT_ADVISOR_ENABLED=1`)
+and sets `ANTHROPIC_API_KEY`, the route is off and the screen shows only the
 calculator's own sentences.
 Marketing consent is separate and optional. The subscription endpoint currently
 returns 503 because no store is implemented; it does not claim a successful signup.

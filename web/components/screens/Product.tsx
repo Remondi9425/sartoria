@@ -19,6 +19,14 @@ type Advice =
   | { state: "ok"; reply: AdvisorReply };
 
 /**
+ * Answers already paid for, per body and pair, for as long as the page is
+ * open. Going back to the ledger and into the same pair again shows the same
+ * paragraph (or the same fixed sentences) instead of running the model again.
+ * Kept in memory only, like the measurements it is keyed by.
+ */
+const answered = new Map<string, Advice>();
+
+/**
  * Why a waist is only "medium", in terms of where it came from. Typed-in and
  * read-back numbers are never described as coming from a video.
  */
@@ -47,13 +55,15 @@ export function Product({
 }: { product: P; twin: DigitalTwin; onBuy: (colourId: string) => void; onBack: () => void }) {
   const [colour, setColour] = useState(product.colours[0]);
   const [why, setWhy] = useState(false);
-  const [advice, setAdvice] = useState<Advice>({ state: "idle" });
+  const asked = `${twin.session_id}|${product.id}`;
+  const [advice, setAdvice] = useState<Advice>(answered.get(asked) ?? { state: "idle" });
   const fit = calculator.recommend(twin, product);
 
   // The fixed sentences below are the calculator's own and always shown; the
   // advisor's paragraph sits above them only when it arrived and checked out.
   async function askAdvisor() {
     setAdvice({ state: "loading" });
+    const done = (a: Advice) => { answered.set(asked, a); setAdvice(a); };
     try {
       const res = await fetch("/api/advisor", {
         method: "POST",
@@ -63,9 +73,9 @@ export function Product({
       if (!res.ok) throw new Error(String(res.status));
       const reply = (await res.json()) as AdvisorReply;
       if (typeof reply.explanation !== "string" || !reply.explanation) throw new Error("empty");
-      setAdvice({ state: "ok", reply });
+      done({ state: "ok", reply });
     } catch {
-      setAdvice({ state: "off" });
+      done({ state: "off" });
     }
   }
 
