@@ -6,8 +6,11 @@
 (@Remondi9425) merges. The flow is:
 
 1. Branch from an up-to-date `main` (collaborators) or fork the repository.
+   Work in a clone (`git clone https://github.com/Remondi9425/sartoria.git`),
+   never in a copy of the files under a new `git init`: a branch with no
+   history in common with `main` cannot be opened as a pull request.
 2. Commit small, focused changes and push the branch.
-3. Open a pull request against `main` and fill in the template.
+3. Open the pull request against `main` yourself and fill in the template.
 4. CI must pass. The maintainer reviews, asks for changes if needed, and merges.
 
 Force-pushes to `main` and deleting it are blocked. Merged branches are deleted
